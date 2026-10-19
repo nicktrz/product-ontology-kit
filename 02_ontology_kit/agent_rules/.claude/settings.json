@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 product/find.py:*)",
+      "Bash(python3 product/index.py)",
+      "Bash(python3 product/check.py)",
+      "Bash(python3 product/check_change.py:*)",
+      "Bash(git rev-parse HEAD)"
+    ]
+  }
+}

@@ -1,0 +1,90 @@
+# Code map of the Selling context. Frappe app "erpnext"; framework code (frappe) is not in this repo.
+
+stack: {framework: Frappe, server: Python, client: JavaScript (Frappe desk), db: MariaDB / PostgreSQL}
+
+layers:
+  - id: doctype_definition
+    what: DocType JSON = schema, form layout, permissions, links (dashboard connections).
+    where: erpnext/selling/doctype/{snake}/{snake}.json
+  - id: doctype_controller
+    what: Server class per DocType; lifecycle methods validate / on_submit / on_cancel / on_update_after_submit.
+    where: erpnext/selling/doctype/{snake}/{snake}.py
+  - id: mappers
+    what: Whitelisted make_* functions that build one document from another with frappe.model.mapper.get_mapped_doc.
+    where: [erpnext/selling/doctype/quotation/mapper.py, erpnext/selling/doctype/sales_order/mapper.py, erpnext/selling/doctype/customer/mapper.py]
+  - id: services
+    what: Sales Order logic split out of the controller (status, reservation, delivery schedule, subcontracting).
+    where: erpnext/selling/doctype/sales_order/services
+  - id: shared_controllers
+    what: Inheritance chain of every selling document.
+    chain: [erpnext/controllers/selling_controller.py#SellingController, erpnext/controllers/stock_controller.py#StockController, erpnext/controllers/accounts_controller.py#AccountsController, erpnext/utilities/transaction_base.py#TransactionBase, erpnext/controllers/status_updater.py#StatusUpdater]
+    also: [erpnext/controllers/taxes_and_totals.py, erpnext/controllers/mapper.py, erpnext/controllers/item_close.py, erpnext/controllers/sales_and_purchase_return.py, erpnext/controllers/queries.py, erpnext/controllers/trends.py, erpnext/controllers/print_settings.py]
+  - id: client_controllers
+    what: Shared form logic for selling documents (pricing, taxes, items, payments).
+    where: [erpnext/public/js/controllers/transaction.js, erpnext/public/js/controllers/taxes_and_totals.js, erpnext/public/js/utils/sales_common.js, erpnext/public/js/utils/party.js]
+  - id: hooks
+    what: App-level registration (doc_events, scheduler, doctype_js, portal routes, permissions).
+    where: erpnext/hooks.py
+  - id: module_ui
+    what: Workspace, sidebar, dashboard, number cards, charts, onboarding, form tour, list filters, settings map.
+    where: [erpnext/selling/workspace, erpnext/selling/sidebar, erpnext/selling/selling_dashboard, erpnext/selling/number_card, erpnext/selling/dashboard_chart, erpnext/selling/module_onboarding, erpnext/selling/onboarding_step, erpnext/selling/form_tour, erpnext/selling/doctype_settings_map]
+  - id: reports
+    where: erpnext/selling/report
+  - id: print_formats
+    where: [erpnext/selling/print_format, erpnext/selling/print_format_field_template]
+  - id: pages
+    where: [erpnext/selling/page/point_of_sale, erpnext/selling/page/sales_funnel]
+
+controllers:   # which class each transactional doctype extends (check.py verifies)
+  Quotation: {file: erpnext/selling/doctype/quotation/quotation.py, base: SellingController}
+  Sales Order: {file: erpnext/selling/doctype/sales_order/sales_order.py, base: SellingController}
+  Sales Invoice: {file: erpnext/accounts/doctype/sales_invoice/sales_invoice.py, base: SellingController}
+  Delivery Note: {file: erpnext/stock/doctype/delivery_note/delivery_note.py, base: SellingController}
+  POS Invoice: {file: erpnext/accounts/doctype/pos_invoice/pos_invoice.py, base: SalesInvoice}
+  Customer: {file: erpnext/selling/doctype/customer/customer.py, base: TransactionBase}
+  Installation Note: {file: erpnext/selling/doctype/installation_note/installation_note.py, base: TransactionBase}
+  Proforma Invoice: {file: erpnext/selling/doctype/proforma_invoice/proforma_invoice.py, base: Document}
+
+neighbours:   # contexts touched; only the listed paths matter for Selling work
+  accounts: [erpnext/accounts/doctype/sales_invoice, erpnext/accounts/doctype/sales_invoice/mapper.py, erpnext/accounts/doctype/payment_request/payment_request.py, erpnext/accounts/doctype/payment_entry/payment_entry.py, erpnext/accounts/doctype/pricing_rule, erpnext/accounts/utils.py]
+  stock: [erpnext/stock/doctype/delivery_note, erpnext/stock/doctype/delivery_note/mapper.py, erpnext/stock/doctype/packed_item/packed_item.py, erpnext/stock/doctype/pick_list, erpnext/stock/doctype/stock_reservation_entry, erpnext/stock/get_item_details.py]
+  crm: [erpnext/crm/doctype/lead/mapper.py, erpnext/crm/doctype/opportunity/mapper.py, erpnext/crm/doctype/prospect/prospect.py, erpnext/crm/utils.py]
+  buying: [erpnext/buying/doctype/purchase_order/mapper.py, erpnext/buying/doctype/supplier_quotation/mapper.py]
+  setup: [erpnext/setup/doctype/customer_group, erpnext/setup/doctype/territory, erpnext/setup/doctype/sales_person, erpnext/setup/doctype/sales_partner, erpnext/setup/doctype/authorization_control]
+
+naming:
+  - DocType "Sales Order" -> folder sales_order, files sales_order.{json,py,js}, class SalesOrder, test test_sales_order.py.
+  - Desk URL slug is kebab-case of the DocType name (sales-order).
+  - Server methods are called from JS by dotted path erpnext.<module>.doctype.<snake>.<file>.<function>; they must be @frappe.whitelist().
+  - Child rows link back by Data fields named *_detail / *_item (so_detail, quotation_item) holding the row name.
+  - Converters are named make_<target> and live in <source>/mapper.py.
+
+skip:   # generated, vendored or not useful for reading the domain
+  - {path: erpnext/locale, why: generated translation catalogs; see copy.yaml}
+  - {path: erpnext/patches, why: one-off data migrations; read only when touching schema history}
+  - {path: erpnext/selling/doctype/quotation/test_records.json, why: fixtures}
+  - {path: erpnext/selling/doctype/sales_order/test_records.json, why: fixtures}
+  - {path: erpnext/selling/insights_workbook, why: exported analytics workbook}
+  - {path: erpnext/selling/doctype, why: "the 'begin: auto-generated types' block in each controller is generated from the JSON"}
+
+patches:   # patches.txt entries for this context (check.py verifies they are listed)
+  - erpnext.patches.v12_0.set_quotation_status
+  - erpnext.patches.v12_0.fix_quotation_expired_status
+  - erpnext.patches.v12_0.move_credit_limit_to_customer_credit_limit
+  - erpnext.patches.v12_0.set_produced_qty_field_in_sales_order_for_work_order
+  - erpnext.patches.v14_0.create_accounting_dimensions_in_sales_order_item
+  - erpnext.patches.v16_0.set_ordered_qty_in_quotation_item
+  - erpnext.patches.v15_0.delete_quotation_lost_record_detail
+patches_list: erpnext/patches.txt
+
+build_and_test:
+  setup: Needs a Frappe bench with erpnext installed on a site; not runnable from this repo alone.
+  run_module_tests: bench --site test_site run-tests --app erpnext --module erpnext.selling.doctype.sales_order.test_sales_order
+  run_doctype_tests: bench --site test_site run-tests --doctype "Sales Order"
+  ci: .github/workflows/server-tests-mariadb.yml
+  lint: [ruff (pyproject.toml), eslint (.eslintrc), pre-commit (.pre-commit-config.yaml)]
+  skeleton_check: python3 product/check.py
+  tests:
+    selling: erpnext/selling/doctype
+    reports: erpnext/selling/report
+    controllers: erpnext/controllers/tests

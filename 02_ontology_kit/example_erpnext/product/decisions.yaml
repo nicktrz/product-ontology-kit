@@ -1,0 +1,98 @@
+# Product decisions visible in code, and open questions that affect code.
+# Every decision points to the code that enforces it (`evidence`, checked by check.py).
+# No design documents exist in the repo; user docs live outside (docs.erpnext.com), module READMEs are one-liners.
+
+decisions:
+  - id: expired_quotation_blocks_order
+    decision: A Sales Order cannot be made from a Quotation whose valid_till has passed, unless Selling Settings allows it.
+    evidence: [erpnext/selling/doctype/quotation/mapper.py#make_sales_order, erpnext/selling/doctype/selling_settings/selling_settings.json]
+    affects: [quotation, sales_order]
+
+  - id: quotation_expiry_is_nightly
+    decision: Expired is written by a daily job, not by status_map; a quotation with a submitted Sales Order never expires.
+    evidence: [erpnext/selling/doctype/quotation/quotation.py#set_expired_status, erpnext/hooks.py#scheduler_events]
+    affects: [quotation, opportunity]
+
+  - id: one_active_quotation_version
+    decision: Revisions share one original; submitting an active revision deactivates the others; Lost or Ordered cannot be revised.
+    evidence: [erpnext/selling/doctype/quotation/quotation.py#Quotation.deactivate_other_versions, erpnext/selling/doctype/quotation/quotation.py#Quotation.validate_can_be_revised]
+    affects: [quotation]
+
+  - id: quotation_drives_crm_status
+    decision: Submitting, cancelling or ordering a Quotation updates Opportunity and Lead status (Quotation / Converted / Open).
+    evidence: [erpnext/selling/doctype/quotation/quotation.py#Quotation.update_opportunity, erpnext/selling/doctype/sales_order/sales_order.py#SalesOrder.update_prevdoc_status, erpnext/controllers/status_updater.py#status_map]
+    affects: [quotation, sales_order, opportunity, lead]
+
+  - id: closed_order_not_cancellable
+    decision: A Closed Sales Order must be re-opened before it can be cancelled.
+    evidence: [erpnext/selling/doctype/sales_order/sales_order.py#SalesOrder.on_cancel]
+    affects: [sales_order]
+
+  - id: credit_limit_on_order
+    decision: Credit limit is enforced when the Sales Order is submitted; bypass_credit_limit_check moves it to the invoice.
+    evidence: [erpnext/selling/doctype/sales_order/sales_order.py#SalesOrder.check_credit_limit, erpnext/accounts/doctype/sales_invoice/sales_invoice.py#SalesInvoice.check_credit_limit]
+    affects: [sales_order, sales_invoice, customer_credit_limit]
+
+  - id: order_status_from_downstream
+    decision: Sales Order status is derived from per_delivered / per_billed written by Delivery Note and Sales Invoice; nobody sets it directly except Hold / Close.
+    evidence: [erpnext/controllers/status_updater.py#status_map, erpnext/selling/doctype/sales_order/services/status.py#StatusService.update_status]
+    affects: [sales_order, delivery_note, sales_invoice]
+
+  - id: proforma_is_not_accounting
+    decision: Proforma Invoice is a separate selling doctype with no ledger impact; PDF is rendered from an unsaved copy of the Sales Order and attached on submit. Off by default.
+    evidence: [erpnext/selling/doctype/proforma_invoice/proforma_invoice.py#ProformaInvoice.render_pdf, erpnext/selling/doctype/proforma_invoice/proforma_invoice.py#validate_feature_enabled]
+    affects: [proforma_invoice, sales_order]
+
+  - id: converters_in_mapper_files
+    decision: make_* converters live in <doctype>/mapper.py, separate from the controller; Sales Order logic is split into services/.
+    evidence: [erpnext/selling/doctype/sales_order/mapper.py, erpnext/selling/doctype/sales_order/services/status.py]
+    affects: [sales_order, quotation, customer]
+
+  - id: unit_price_rows
+    decision: Quotation and Sales Order may carry rows with qty 0 (unit price only); mappers keep them.
+    evidence: [erpnext/selling/doctype/quotation/quotation.py#Quotation.set_has_unit_price_items, erpnext/selling/doctype/sales_order/sales_order.py#SalesOrder.set_has_unit_price_items]
+    affects: [quotation, sales_order]
+
+open_questions:
+  - id: avg_so_value_card_uses_po
+    question: Number card "Average Sales Order Value" aggregates Purchase Order. Bug or intended?
+    evidence: [erpnext/selling/number_card/average_sales_order_value/average_sales_order_value.json]
+  - id: quotation_replied_status
+    question: Quotation status option "Replied" is not produced by status_map or selling code; presumably set by the framework on e-mail reply. Confirm.
+    evidence: [erpnext/selling/doctype/quotation/quotation.json, erpnext/controllers/status_updater.py#status_map]
+  - id: phone_payment_emitter
+    question: POS listens to process_phone_payment, but no emitter exists in this repo. Which app sends it and with what payload?
+    evidence: [erpnext/selling/page/point_of_sale/pos_payment.js]
+  - id: lagging_catalogs
+    question: af, fi and ta catalogs miss strings present in main.pot (e.g. Proforma Invoice). Accept or resync?
+    evidence: [erpnext/locale/af.po, erpnext/locale/fi.po, erpnext/locale/ta.po]
+  - id: module_readme_outdated
+    question: erpnext/selling/README.md still lists Campaign as a Selling form; Campaign lives in CRM.
+    evidence: [erpnext/selling/README.md, erpnext/crm/doctype/campaign]
+
+# Requirements in the form an agent and check_change.py read. Written and approved by people.
+requirements:
+  - id: customer_contract_no_required
+    kind: product                  # product: a violation goes back to the product owner
+    rule: >-
+      Customer Contract No. is mandatory on Sales Order. It is carried from Quotation to Sales Order
+      and from Sales Order to Sales Invoice and Delivery Note, printed on the invoice, shown in sales reports.
+    field: customer_contract_no
+    entity: sales_order
+    carried_to: [quotation, sales_invoice, delivery_note]
+    required_near_field: ['"reqd":\s*1']
+    applies_to: [quotation_to_sales_order, inter_company_po_to_sales_order]
+    exceptions: []                 # none: every path that creates a Sales Order fills the number
+    shown_in:
+      - erpnext/accounts/report/sales_register/sales_register.py
+      - erpnext/accounts/report/item_wise_sales_register/item_wise_sales_register.py
+      - erpnext/selling/report/sales_order_analysis/sales_order_analysis.py
+      - erpnext/accounts/print_format/sales_invoice_classic/sales_invoice_classic.json
+      - erpnext/accounts/print_format/sales_invoice_modern/sales_invoice_modern.json
+      - erpnext/accounts/print_format/sales_invoice_bordered/sales_invoice_bordered.json
+      - erpnext/accounts/print_format/sales_invoice_modern_with_images/sales_invoice_modern_with_images.json
+    forbidden_values: [N/A, TBD]       # compared without case
+    forbidden_in_change: [mandatory_depends_on, '"reqd":\s*0', 'ignore_mandatory']
+    migration: ^erpnext/patches/.*\.py$
+    open_questions: []
+    approved_by: product owner

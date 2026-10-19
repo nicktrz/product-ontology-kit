@@ -1,0 +1,167 @@
+# Screens of the Selling context (Frappe desk forms, lists, pages, workspace, portal, reports).
+# view = layout definition (DocType / Page / Workspace JSON); logic = client and server code.
+# entities -> domain.yaml ids; leads_to -> domain.yaml flow ids (check.py finds each flow's method in logic);
+# calls -> server methods called from logic; copy -> copy.yaml ids; events -> analytics.yaml ids.
+# Desk routes follow Frappe convention: /desk/<doctype-slug>/<name>, list at /desk/<doctype-slug>.
+
+screens:
+  - id: customer_form
+    purpose: Customer master with credit limits, sales team, overview tab and create buttons.
+    route: /desk/customer/{name}
+    entities: [customer, customer_credit_limit, sales_team]
+    view: erpnext/selling/doctype/customer/customer.json
+    logic: [erpnext/selling/doctype/customer/customer.js, erpnext/public/js/customer_overview.js, erpnext/public/js/party_overview.js, erpnext/selling/doctype/customer/customer_overview.py]
+    opens_from: [customer_list, selling_workspace]
+    leads_to: [customer_to_quotation, customer_to_opportunity, customer_to_payment_entry]
+    calls: [erpnext.selling.doctype.customer.customer.get_customer_primary]
+    copy: [total_contribution_100, credit_limit_crossed]
+
+  - id: customer_list
+    purpose: Customer list with standard filters.
+    route: /desk/customer
+    entities: [customer]
+    view: erpnext/selling/doctype/customer/list_filter
+    logic: [erpnext/selling/doctype/customer/customer_list.js]
+    opens_from: [selling_workspace]
+
+  - id: quotation_form
+    purpose: Build and send a quotation to a customer, lead or prospect; revise, mark lost, convert.
+    route: /desk/quotation/{name}
+    entities: [quotation, quotation_item, sales_taxes_and_charges, payment_schedule]
+    view: erpnext/selling/doctype/quotation/quotation.json
+    logic: [erpnext/selling/doctype/quotation/quotation.js, erpnext/public/js/utils/sales_common.js, erpnext/public/js/controllers/transaction.js, erpnext/selling/doctype/quotation/quotation_dashboard.py]
+    opens_from: [quotation_list, customer_form, selling_workspace]
+    leads_to: [quotation_to_sales_order, quotation_revision, opportunity_to_quotation]
+    copy: [quotation_validity_ended, cannot_revise_quotation]
+    assets: [erpnext/selling/print_format/quotation_classic, erpnext/selling/print_format_field_template/quotation_taxes]
+
+  - id: quotation_list
+    purpose: Quotations with status indicators and saved filters (drafts, open, expiring, lost).
+    route: /desk/quotation
+    entities: [quotation]
+    view: erpnext/selling/doctype/quotation/list_filter
+    logic: [erpnext/selling/doctype/quotation/quotation_list.js]
+    opens_from: [selling_workspace]
+
+  - id: sales_order_form
+    purpose: Confirm an order, then deliver, bill, reserve stock, request payment, procure or produce.
+    route: /desk/sales-order/{name}
+    entities: [sales_order, sales_order_item, packed_item, sales_team, payment_schedule, delivery_schedule_item]
+    view: erpnext/selling/doctype/sales_order/sales_order.json
+    logic: [erpnext/selling/doctype/sales_order/sales_order.js, erpnext/public/js/utils/sales_common.js, erpnext/public/js/controllers/transaction.js, erpnext/public/js/stock_reservation.js, erpnext/public/js/utils/item_close.js, erpnext/selling/doctype/sales_order/sales_order_dashboard.py]
+    opens_from: [sales_order_list, quotation_form, sales_order_calendar, selling_workspace]
+    leads_to: [sales_order_to_delivery_note, sales_order_to_sales_invoice, sales_order_to_pick_list, sales_order_to_material_request, sales_order_to_raw_material_request, sales_order_to_purchase_order, sales_order_to_inter_company_po, sales_order_to_work_orders, sales_order_to_production_plan, sales_order_to_project, sales_order_to_maintenance_schedule, sales_order_to_maintenance_visit, sales_order_to_subcontracting_inward, sales_order_to_payment_request, sales_order_to_payment_entry, quotation_to_sales_order, inter_company_po_to_sales_order]
+    calls: [erpnext.selling.doctype.sales_order.sales_order.update_status, erpnext.selling.doctype.sales_order.sales_order.get_work_order_items, erpnext.selling.doctype.sales_order.sales_order.get_stock_reservation_status]
+    copy: [closed_order_cannot_cancel, quotation_is_lost]
+    assets: [erpnext/selling/print_format/sales_order_classic, erpnext/selling/print_format_field_template/sales_order_taxes]
+
+  - id: proforma_dialog
+    purpose: Dialog on the Sales Order form to issue a Proforma Invoice and e-mail its PDF.
+    entities: [proforma_invoice, proforma_invoice_item, sales_order]
+    view: erpnext/selling/doctype/proforma_invoice/proforma_invoice.json
+    logic: [erpnext/public/js/sales_order_proforma.js, erpnext/selling/doctype/proforma_invoice/proforma_invoice.js]
+    opens_from: [sales_order_form]
+    leads_to: [sales_order_to_proforma]
+    calls: [erpnext.selling.doctype.proforma_invoice.proforma_invoice.get_sales_order_items, erpnext.selling.doctype.proforma_invoice.proforma_invoice.send_proforma_email]
+    copy: [proforma_requires_submitted_so, proforma_only_issued_can_be_emailed]
+    assets: [erpnext/selling/print_format/proforma_invoice]
+
+  - id: sales_order_list
+    purpose: Orders by fulfilment status; bulk close and bulk create Delivery Notes / Invoices.
+    route: /desk/sales-order
+    entities: [sales_order]
+    view: erpnext/selling/doctype/sales_order/list_filter
+    logic: [erpnext/selling/doctype/sales_order/sales_order_list.js, erpnext/public/js/bulk_transaction_processing.js]
+    opens_from: [selling_workspace]
+    calls: [erpnext.selling.doctype.sales_order.sales_order.close_or_unclose_sales_orders, erpnext.utilities.bulk_transaction.transaction_processing]
+
+  - id: sales_order_calendar
+    purpose: Sales Orders on a calendar by delivery date.
+    route: /desk/sales-order/view/calendar
+    entities: [sales_order]
+    view: erpnext/selling/doctype/sales_order/sales_order.json
+    logic: [erpnext/selling/doctype/sales_order/sales_order_calendar.js]
+    calls: [erpnext.selling.doctype.sales_order.sales_order.get_events]
+
+  - id: delivery_note_form
+    purpose: Boundary (stock). Shipment against a Sales Order; creates invoice, installation note, return.
+    route: /desk/delivery-note/{name}
+    entities: [delivery_note, delivery_note_item]
+    view: erpnext/stock/doctype/delivery_note/delivery_note.json
+    logic: [erpnext/stock/doctype/delivery_note/delivery_note.js]
+    opens_from: [sales_order_form]
+    leads_to: [delivery_note_to_sales_invoice, delivery_note_to_installation_note, delivery_note_return, sales_order_to_delivery_note]
+
+  - id: sales_invoice_form
+    purpose: Boundary (accounts). Invoice against a Sales Order, Delivery Note or Quotation.
+    route: /desk/sales-invoice/{name}
+    entities: [sales_invoice, sales_invoice_item]
+    view: erpnext/accounts/doctype/sales_invoice/sales_invoice.json
+    logic: [erpnext/accounts/doctype/sales_invoice/sales_invoice.js]
+    opens_from: [sales_order_form, delivery_note_form]
+    leads_to: [sales_invoice_to_delivery_note, sales_invoice_return, sales_order_to_sales_invoice, delivery_note_to_sales_invoice, quotation_to_sales_invoice]
+
+  - id: product_bundle_form
+    purpose: Define a bundle item and its components; new version on change.
+    route: /desk/product-bundle/{name}
+    entities: [product_bundle, product_bundle_item]
+    view: erpnext/selling/doctype/product_bundle/product_bundle.json
+    logic: [erpnext/selling/doctype/product_bundle/product_bundle.js, erpnext/selling/doctype/product_bundle/product_bundle_list.js]
+    leads_to: [product_bundle_new_version]
+
+  - id: installation_note_form
+    purpose: Record installation of delivered items.
+    route: /desk/installation-note/{name}
+    entities: [installation_note, installation_note_item]
+    view: erpnext/selling/doctype/installation_note/installation_note.json
+    logic: [erpnext/selling/doctype/installation_note/installation_note.js]
+    opens_from: [delivery_note_form]
+    leads_to: [delivery_note_to_installation_note]
+
+  - id: selling_settings_form
+    purpose: Global selling switches (see features.yaml#selling_settings).
+    route: /desk/selling-settings
+    entities: [selling_settings]
+    view: erpnext/selling/doctype/selling_settings/selling_settings.json
+    logic: [erpnext/selling/doctype/selling_settings/selling_settings.js]
+
+  - id: point_of_sale
+    purpose: Retail checkout page; writes POS Invoice (accounts context).
+    route: /desk/point-of-sale
+    entities: [pos_invoice, customer]
+    view: erpnext/selling/page/point_of_sale/point_of_sale.json
+    logic: [erpnext/selling/page/point_of_sale/point_of_sale.js, erpnext/selling/page/point_of_sale/pos_controller.js, erpnext/selling/page/point_of_sale/pos_payment.js, erpnext/selling/page/point_of_sale/point_of_sale.py, erpnext/public/js/point-of-sale.bundle.js]
+    events: [pos_opening_entry_changed, phone_payment_processed]
+    copy: [pos_closed]
+    tests: [erpnext/selling/page/point_of_sale/test_point_of_sale.py]
+
+  - id: sales_funnel
+    purpose: Funnel of leads -> opportunities -> quotations -> orders.
+    route: /desk/sales-funnel
+    entities: [lead, opportunity, quotation, sales_order]
+    view: erpnext/selling/page/sales_funnel/sales_funnel.json
+    logic: [erpnext/selling/page/sales_funnel/sales_funnel.js, erpnext/selling/page/sales_funnel/sales_funnel.py]
+    tests: [erpnext/selling/page/sales_funnel/test_sales_funnel.py]
+
+  - id: selling_workspace
+    purpose: Module home with shortcuts, number cards and charts.
+    route: /desk/selling
+    entities: [customer, quotation, sales_order]
+    view: erpnext/selling/workspace/selling/selling.json
+    logic: [erpnext/selling/sidebar/selling/selling.json, erpnext/selling/selling_dashboard/selling/selling.json, erpnext/selling/module_onboarding/selling_onboarding, erpnext/selling/form_tour/customer_form_tour]
+    events: [number_cards, dashboard_charts]
+
+  - id: customer_portal
+    purpose: Website pages where a customer sees own quotations, orders, invoices, shipments.
+    route: [/quotations, /orders, /invoices, /shipments]
+    entities: [quotation, sales_order, sales_invoice, delivery_note]
+    view: erpnext/templates/pages/order.html
+    logic: [erpnext/templates/pages/order.py, erpnext/controllers/website_list_for_contact.py, erpnext/selling/doctype/sales_order/sales_order.py#get_list_context, erpnext/selling/doctype/quotation/quotation.py#get_list_context]
+
+  - id: selling_reports
+    purpose: Script reports of the module; each folder holds <name>.json/.py/.js and a test.
+    route: /desk/query-report/{Report Name}
+    entities: [customer, quotation, sales_order]
+    view: erpnext/selling/report
+    reports: [address_and_contacts, available_stock_for_packing_items, customer_acquisition_and_loyalty, customer_credit_balance, customer_wise_item_price, customers_without_any_sales_transactions, inactive_customers, item_wise_sales_history, lost_quotations, payment_terms_status_for_sales_order, pending_so_items_for_purchase_request, quotation_trends, sales_analytics, sales_order_analysis, sales_order_trends, sales_partner_commission_summary, sales_partner_target_variance_based_on_item_group, sales_partner_transaction_summary, sales_person_commission_summary, sales_person_target_variance_based_on_item_group, sales_person_wise_transaction_summary, territory_target_variance_based_on_item_group, territory_wise_sales]
+    logic: [erpnext/controllers/trends.py, erpnext/public/js/sales_trends_filters.js]

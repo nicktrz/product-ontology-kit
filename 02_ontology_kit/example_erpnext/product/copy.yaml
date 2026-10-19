@@ -1,0 +1,39 @@
+# UI texts of the Selling context.
+# Frappe uses gettext: the key IS the English source string (msgid), wrapped in _() in Python
+# and __() in JavaScript. DocType labels, field labels and Select options are extracted from JSON.
+# check.py: each msgid occurs in its `source` file, in main.pot and in every catalog not listed in catalogs_behind.
+
+source_language: en
+catalog_template: erpnext/locale/main.pot
+catalogs_dir: erpnext/locale
+catalog_pattern: "{lang}.po"
+languages: [af, ar, bg, bs, cs, da, de, eo, es, fa, fi, fr, hi, hr, hu, id, it, km, ko, mn, my, nb, nl, pl, pt, pt_BR, ro, ru, sl, sr, sr_CS, sv, ta, th, tr, uk, uz, vi, zh, zh_TW]
+# Catalogs that lag behind main.pot (synced from Crowdin, see crowdin.yml). New strings appear there later.
+catalogs_behind: [af, fi, ta]
+sync: crowdin.yml
+extractors: babel_extractors.csv
+
+rules:
+  - Never hand-edit .po files; add the string in code wrapped in _() / __() and regenerate main.pot.
+  - Placeholders are positional {0}, {1}; keep them in the same msgid, never concatenate translated parts.
+  - Status labels are Select options in DocType JSON; changing an option changes the msgid in every catalog.
+  - RTL languages present (ar, fa) are laid out by the Frappe framework; no RTL handling in this app.
+  - Print formats reuse the same catalogs through _() in Jinja.
+
+key_pattern: English sentence, sentence case, ends with a period for errors; {n} placeholders.
+
+keys:
+  - {id: quotation_validity_ended, msgid: "Validity period of this quotation has ended.", source: erpnext/selling/doctype/quotation/mapper.py}
+  - {id: cannot_revise_quotation, msgid: "Cannot revise a Quotation with status {0}.", source: erpnext/selling/doctype/quotation/quotation.py}
+  - {id: closed_order_cannot_cancel, msgid: "Closed order cannot be cancelled. Unclose to cancel.", source: erpnext/selling/doctype/sales_order/sales_order.py}
+  - {id: quotation_is_lost, msgid: "Quotation {0} is Lost", source: erpnext/selling/doctype/sales_order/sales_order.py}
+  - {id: total_contribution_100, msgid: "Total contribution percentage should be equal to 100", source: erpnext/selling/doctype/customer/customer.py}
+  - {id: credit_limit_crossed, msgid: "Credit limit has been crossed for customer {0} ({1}/{2})", source: erpnext/selling/doctype/customer/customer.py}
+  - {id: proforma_requires_submitted_so, msgid: "A Proforma Invoice can only be created against a submitted Sales Order.", source: erpnext/selling/doctype/proforma_invoice/proforma_invoice.py}
+  - {id: proforma_only_issued_can_be_emailed, msgid: "Only an issued Proforma Invoice can be emailed.", source: erpnext/selling/doctype/proforma_invoice/proforma_invoice.py}
+  - {id: pos_closed, msgid: "POS Closed", source: erpnext/selling/page/point_of_sale/pos_controller.js}
+  - {id: status_to_deliver_and_bill, msgid: "To Deliver and Bill", source: erpnext/selling/doctype/sales_order/sales_order.json}
+  - {id: status_partially_ordered, msgid: "Partially Ordered", source: erpnext/selling/doctype/quotation/quotation.json}
+  - {id: doctype_sales_order, msgid: "Sales Order", source: erpnext/selling/doctype/sales_order/sales_order.json}
+  - {id: doctype_quotation, msgid: "Quotation", source: erpnext/selling/doctype/quotation/quotation.json}
+  - {id: doctype_proforma_invoice, msgid: "Proforma Invoice", source: erpnext/selling/doctype/proforma_invoice/proforma_invoice.json}

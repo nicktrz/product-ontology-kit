@@ -1,0 +1,44 @@
+# Analytics of the Selling context.
+# The app sends no product-telemetry events (no tracking SDK). What exists:
+#  1. realtime events (frappe.publish_realtime -> frappe.realtime.on) that drive the UI;
+#  2. UTM attribution fields stored on documents;
+#  3. aggregate metrics: number cards, dashboard charts, Insights workbook, script reports (screens.yaml#selling_reports).
+# check.py: event names occur in emitter and receiver files; card/chart values match their JSON; UTM fields exist.
+
+events:
+  - id: pos_opening_entry_changed
+    name: "poe_{pos_opening_entry}"
+    match: poe_
+    emitted_in: [erpnext/accounts/doctype/pos_closing_entry/pos_closing_entry.py#POSClosingEntry.on_submit, erpnext/accounts/doctype/pos_opening_entry/pos_opening_entry.py#POSOpeningEntry.on_cancel]
+    received_in: [erpnext/selling/page/point_of_sale/pos_controller.js]
+    screen: point_of_sale
+    payload: {operation: "Closed | Cancelled", doc: POS Closing Entry (only on Closed)}
+
+  - id: phone_payment_processed
+    name: process_phone_payment
+    match: process_phone_payment
+    emitted_in: []   # emitter lives outside this repository (payments app); see decisions.yaml
+    received_in: [erpnext/selling/page/point_of_sale/pos_payment.js]
+    screen: point_of_sale
+
+attribution:
+  setting: Selling Settings.enable_utm
+  fields: [utm_source, utm_medium, utm_campaign]
+  entities: [quotation, sales_order]
+
+number_cards:
+  - {id: active_customers, json: erpnext/selling/number_card/active_customers/active_customers.json, document_type: Customer, function: Count}
+  - {id: annual_sales, json: erpnext/selling/number_card/annual_sales/annual_sales.json, document_type: Sales Order, function: Sum}
+  - {id: average_sales_order_value, json: erpnext/selling/number_card/average_sales_order_value/average_sales_order_value.json, document_type: Purchase Order, function: Average, note: "counts Purchase Orders despite the name, see decisions.yaml#avg_so_value_card_uses_po"}
+  - {id: sales_orders_count, json: erpnext/selling/number_card/sales_orders_count/sales_orders_count.json, document_type: Sales Order, function: Count}
+  - {id: sales_orders_to_bill, json: erpnext/selling/number_card/sales_orders_to_bill/sales_orders_to_bill.json, document_type: Sales Order, function: Count}
+  - {id: sales_orders_to_deliver, json: erpnext/selling/number_card/sales_orders_to_deliver/sales_orders_to_deliver.json, document_type: Sales Order, function: Count}
+  - {id: total_sales_amount, json: erpnext/selling/number_card/total_sales_amount/total_sales_amount.json, document_type: Sales Order, function: Sum}
+
+dashboard_charts:
+  - {id: item_wise_annual_sales, json: erpnext/selling/dashboard_chart/item_wise_annual_sales/item_wise_annual_sales.json, report_name: Item-wise Sales History}
+  - {id: sales_order_analysis, json: erpnext/selling/dashboard_chart/sales_order_analysis/sales_order_analysis.json, report_name: Sales Order Analysis}
+  - {id: sales_order_trends, json: erpnext/selling/dashboard_chart/sales_order_trends/sales_order_trends.json, report_name: Sales Order Trends}
+  - {id: top_customers, json: erpnext/selling/dashboard_chart/top_customers/top_customers.json, report_name: Delivery Note Trends}
+
+workbooks: [erpnext/selling/insights_workbook/selling/selling.json]

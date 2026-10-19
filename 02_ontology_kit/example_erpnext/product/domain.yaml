@@ -1,0 +1,299 @@
+# Domain of the Selling bounded context.
+# Source: DocType JSON (fields, links, child tables) and *mapper.py (conversions). Fields are not copied:
+# `json` points to the definition, `key_fields` names the fields that matter.
+# links / tables: {fieldname: entity id}. A list value means a Dynamic Link (allowed targets).
+# row_refs: Data fields that store the `name` of a row in another entity's child table.
+# check.py verifies every doctype, field, link target, status option and conversion below.
+
+context: selling
+module_dir: erpnext/selling
+# Selling doctypes not modelled as entities (masters or helpers with no cross-context links).
+minor_doctypes: [erpnext/selling/doctype/industry_type/industry_type.json, erpnext/selling/doctype/sales_partner_type/sales_partner_type.json, erpnext/selling/doctype/sms_center/sms_center.json, erpnext/selling/doctype/supplier_number_at_customer/supplier_number_at_customer.json]
+entities:
+  # ---------- inside the context ----------
+  - id: customer
+    doctype: Customer
+    label: Customer
+    context: selling
+    kind: master
+    json: erpnext/selling/doctype/customer/customer.json
+    code: erpnext/selling/doctype/customer/customer.py#Customer
+    extra_code: [erpnext/selling/doctype/customer/customer_overview.py, erpnext/selling/doctype/customer/customer_dashboard.py]
+    key_fields: [customer_name, customer_type, customer_group, territory, disabled, is_frozen, on_hold, is_internal_customer, so_required, dn_required]
+    links: {lead_name: lead, opportunity_name: opportunity, prospect_name: prospect, customer_group: customer_group, territory: territory, default_sales_partner: sales_partner}
+    tables: {credit_limits: customer_credit_limit, sales_team: sales_team}
+    lifecycle: {validate: [validate_lead_not_converted, validate_credit_limit_on_change, validate_prospect_not_converted], after_insert: [update_lead_status], on_update: [create_primary_contact, create_primary_address, link_address_and_contact]}
+    copy: [total_contribution_100]
+    tests: [erpnext/selling/doctype/customer/test_customer.py, erpnext/selling/doctype/customer/test_customer_overview.py]
+
+  - id: customer_credit_limit
+    doctype: Customer Credit Limit
+    label: Credit Limit (row of Customer)
+    context: selling
+    kind: child
+    json: erpnext/selling/doctype/customer_credit_limit/customer_credit_limit.json
+    key_fields: [company, credit_limit, overdue_billing_threshold, bypass_credit_limit_check]
+
+  - id: sales_team
+    doctype: Sales Team
+    label: Sales Team (row, shared by Customer and sales documents)
+    context: selling
+    kind: child
+    json: erpnext/selling/doctype/sales_team/sales_team.json
+    key_fields: [allocated_percentage, commission_rate, incentives]
+    links: {sales_person: sales_person}
+
+  - id: quotation
+    doctype: Quotation
+    label: Quotation
+    context: selling
+    kind: transaction
+    json: erpnext/selling/doctype/quotation/quotation.json
+    code: erpnext/selling/doctype/quotation/quotation.py#Quotation
+    extra_code: [erpnext/selling/doctype/quotation/mapper.py, erpnext/selling/doctype/quotation/quotation_dashboard.py]
+    key_fields: [quotation_to, party_name, transaction_date, valid_till, order_type, is_active, revision_of, is_latest_revision, grand_total]
+    links: {party_name: [customer, lead, prospect], opportunity: opportunity, revision_of: quotation, customer_group: customer_group, territory: territory, referral_sales_partner: sales_partner}
+    tables: {items: quotation_item, taxes: sales_taxes_and_charges, payment_schedule: payment_schedule, packed_items: packed_item}
+    status:
+      field: status
+      options: [Draft, Open, Replied, Partially Ordered, Ordered, Lost, Cancelled, Expired]
+      computed_by: status_map
+      set_outside_status_map: {Expired: erpnext.selling.doctype.quotation.quotation.set_expired_status}
+    lifecycle: {on_submit: [update_opportunity, update_lead, deactivate_other_versions, update_latest_revision], on_cancel: [set_status, update_opportunity, update_lead, update_latest_revision], on_update_after_submit: [update_opportunity, update_lead]}
+    copy: [quotation_validity_ended, cannot_revise_quotation]
+    assets: [erpnext/selling/print_format/quotation_classic, erpnext/selling/print_format/quotation_modern, erpnext/selling/print_format/quotation_bordered, erpnext/selling/print_format/quotation_modern_with_images]
+    docs: [erpnext/selling/doctype/quotation/README.md]
+    tests: [erpnext/selling/doctype/quotation/test_quotation.py]
+
+  - id: quotation_item
+    doctype: Quotation Item
+    label: Quotation Item
+    context: selling
+    kind: child
+    json: erpnext/selling/doctype/quotation_item/quotation_item.json
+    key_fields: [qty, stock_qty, rate, amount, ordered_qty, is_alternative]
+    links: {item_code: item, product_bundle: product_bundle, prevdoc_docname: [opportunity]}
+
+  - id: sales_order
+    doctype: Sales Order
+    label: Sales Order
+    context: selling
+    kind: transaction
+    json: erpnext/selling/doctype/sales_order/sales_order.json
+    code: erpnext/selling/doctype/sales_order/sales_order.py#SalesOrder
+    extra_code: [erpnext/selling/doctype/sales_order/mapper.py, erpnext/selling/doctype/sales_order/services/status.py, erpnext/selling/doctype/sales_order/services/reservation.py, erpnext/selling/doctype/sales_order/services/delivery_schedule.py, erpnext/selling/doctype/sales_order/services/subcontracting.py]
+    key_fields: [customer, transaction_date, delivery_date, order_type, per_delivered, per_billed, per_picked, skip_delivery_note, reserve_stock, is_internal_customer, is_subcontracted, grand_total]
+    links: {customer: customer, customer_group: customer_group, territory: territory, sales_partner: sales_partner, project: project}
+    tables: {items: sales_order_item, taxes: sales_taxes_and_charges, packed_items: packed_item, payment_schedule: payment_schedule, sales_team: sales_team}
+    status:
+      field: status
+      options: [Draft, On Hold, To Pay, To Deliver and Bill, To Bill, To Deliver, Completed, Cancelled, Closed]
+      computed_by: status_map
+      sub_status:
+        delivery_status: [Not Delivered, Fully Delivered, Partly Delivered, Closed, Not Applicable]
+        billing_status: [Not Billed, Fully Billed, Partly Billed, Closed]
+        advance_payment_status: [Not Requested, Requested, Partially Paid, Fully Paid]
+    lifecycle: {on_submit: [update_prevdoc_status, check_credit_limit, update_reserved_qty, update_project, update_blanket_order, create_stock_reservation_entries], on_cancel: [check_nextdoc_docstatus, update_reserved_qty, update_prevdoc_status, update_blanket_order, cancel_stock_reservation_entries]}
+    copy: [closed_order_cannot_cancel, quotation_is_lost]
+    assets: [erpnext/selling/print_format/sales_order_classic, erpnext/selling/print_format/sales_order_modern, erpnext/selling/print_format/sales_order_bordered, erpnext/selling/print_format/sales_order_modern_with_images]
+    docs: [erpnext/selling/doctype/sales_order/README.md]
+    tests: [erpnext/selling/doctype/sales_order/test_sales_order.py, erpnext/controllers/tests/test_item_close_sales_order.py]
+
+  - id: sales_order_item
+    doctype: Sales Order Item
+    label: Sales Order Item
+    context: selling
+    kind: child
+    json: erpnext/selling/doctype/sales_order_item/sales_order_item.json
+    key_fields: [qty, stock_qty, rate, amount, delivery_date, warehouse, delivered_qty, billed_amt, picked_qty, ordered_qty, stock_reserved_qty, delivered_by_supplier, reserve_stock]
+    links: {item_code: item, product_bundle: product_bundle, prevdoc_docname: quotation}
+    row_refs: {quotation_item: quotation_item}
+
+  - id: delivery_schedule_item
+    doctype: Delivery Schedule Item
+    label: Delivery Schedule line (standalone, per Sales Order Item)
+    context: selling
+    kind: record
+    json: erpnext/selling/doctype/delivery_schedule_item/delivery_schedule_item.json
+    code: erpnext/selling/doctype/sales_order/services/delivery_schedule.py#DeliveryScheduleService
+    key_fields: [delivery_date, qty, stock_qty, warehouse]
+    links: {sales_order: sales_order, item_code: item}
+    row_refs: {sales_order_item: sales_order_item}
+    tests: [erpnext/selling/doctype/delivery_schedule_item/test_delivery_schedule_item.py]
+
+  - id: proforma_invoice
+    doctype: Proforma Invoice
+    label: Proforma Invoice
+    context: selling
+    kind: transaction
+    json: erpnext/selling/doctype/proforma_invoice/proforma_invoice.json
+    code: erpnext/selling/doctype/proforma_invoice/proforma_invoice.py#ProformaInvoice
+    key_fields: [based_on, hide_item_qty, proforma_pdf, print_format]
+    links: {sales_order: sales_order, customer: customer}
+    tables: {items: proforma_invoice_item}
+    status:
+      field: status
+      options: [Draft, Issued, Cancelled]
+      computed_by: controller
+    lifecycle: {validate: [validate_sales_order, set_item_values], on_submit: [generate_and_attach_pdf]}
+    copy: [proforma_requires_submitted_so, proforma_only_issued_can_be_emailed]
+    assets: [erpnext/selling/print_format/proforma_invoice]
+    tests: [erpnext/selling/doctype/proforma_invoice/test_proforma_invoice.py]
+
+  - id: proforma_invoice_item
+    doctype: Proforma Invoice Item
+    label: Proforma Invoice Item
+    context: selling
+    kind: child
+    json: erpnext/selling/doctype/proforma_invoice_item/proforma_invoice_item.json
+    key_fields: [qty, rate, amount]
+    links: {item_code: item}
+    row_refs: {so_detail: sales_order_item}
+
+  - id: product_bundle
+    doctype: Product Bundle
+    label: Product Bundle
+    context: selling
+    kind: master
+    json: erpnext/selling/doctype/product_bundle/product_bundle.json
+    code: erpnext/selling/doctype/product_bundle/product_bundle.py#ProductBundle
+    key_fields: [is_active, disabled]
+    links: {new_item_code: item, amended_from: product_bundle}
+    tables: {items: product_bundle_item}
+    lifecycle: {on_submit: [make_active]}
+    tests: [erpnext/selling/doctype/product_bundle/test_product_bundle.py]
+
+  - id: product_bundle_item
+    doctype: Product Bundle Item
+    label: Product Bundle Item
+    context: selling
+    kind: child
+    json: erpnext/selling/doctype/product_bundle_item/product_bundle_item.json
+    key_fields: [qty, rate]
+    links: {item_code: item}
+
+  - id: installation_note
+    doctype: Installation Note
+    label: Installation Note
+    context: selling
+    kind: transaction
+    json: erpnext/selling/doctype/installation_note/installation_note.json
+    code: erpnext/selling/doctype/installation_note/installation_note.py#InstallationNote
+    key_fields: [inst_date, status]
+    links: {customer: customer, customer_group: customer_group, territory: territory, project: project}
+    tables: {items: installation_note_item}
+    tests: [erpnext/selling/doctype/installation_note/test_installation_note.py]
+
+  - id: installation_note_item
+    doctype: Installation Note Item
+    label: Installation Note Item
+    context: selling
+    kind: child
+    json: erpnext/selling/doctype/installation_note_item/installation_note_item.json
+    key_fields: [qty, serial_no, prevdoc_doctype, prevdoc_docname]
+    links: {item_code: item}
+    row_refs: {prevdoc_detail_docname: delivery_note_item}
+
+  - id: party_specific_item
+    doctype: Party Specific Item
+    label: Party Specific Item (item restriction per customer)
+    context: selling
+    kind: master
+    json: erpnext/selling/doctype/party_specific_item/party_specific_item.json
+    key_fields: [party_type, restrict_based_on, based_on_value]
+    links: {party: [customer, customer_group]}
+    tests: [erpnext/selling/doctype/party_specific_item/test_party_specific_item.py]
+
+  - id: selling_settings
+    doctype: Selling Settings
+    label: Selling Settings
+    context: selling
+    kind: settings
+    json: erpnext/selling/doctype/selling_settings/selling_settings.json
+    code: erpnext/selling/doctype/selling_settings/selling_settings.py#SellingSettings
+    links: {customer_group: customer_group, territory: territory}
+    see: features.yaml#selling_settings
+    tests: [erpnext/selling/doctype/selling_settings/test_selling_settings.py]
+  # ---------- touchpoints in neighbour contexts (only the fields that join with Selling) ----------
+  - {id: lead, doctype: Lead, context: crm, kind: boundary, json: erpnext/crm/doctype/lead/lead.json, links: {customer: customer}, status: {field: status, computed_by: status_map}}
+  - {id: opportunity, doctype: Opportunity, context: crm, kind: boundary, json: erpnext/crm/doctype/opportunity/opportunity.json, links: {party_name: [lead, customer, prospect]}, tables: {items: opportunity_item}, status: {field: status, computed_by: status_map}}
+  - {id: opportunity_item, doctype: Opportunity Item, context: crm, kind: boundary, json: erpnext/crm/doctype/opportunity_item/opportunity_item.json, links: {item_code: item}}
+  - {id: prospect, doctype: Prospect, context: crm, kind: boundary, json: erpnext/crm/doctype/prospect/prospect.json, links: {customer_group: customer_group, territory: territory}}
+  - {id: sales_invoice, doctype: Sales Invoice, context: accounts, kind: boundary, json: erpnext/accounts/doctype/sales_invoice/sales_invoice.json, key_fields: [is_pos, update_stock, is_return, return_against], links: {customer: customer, sales_partner: sales_partner}, tables: {items: sales_invoice_item, taxes: sales_taxes_and_charges, packed_items: packed_item, payment_schedule: payment_schedule, sales_team: sales_team}}
+  - {id: sales_invoice_item, doctype: Sales Invoice Item, context: accounts, kind: boundary, json: erpnext/accounts/doctype/sales_invoice_item/sales_invoice_item.json, links: {sales_order: sales_order, delivery_note: delivery_note, product_bundle: product_bundle}, row_refs: {so_detail: sales_order_item, dn_detail: delivery_note_item}}
+  - {id: pos_invoice, doctype: POS Invoice, context: accounts, kind: boundary, json: erpnext/accounts/doctype/pos_invoice/pos_invoice.json, links: {customer: customer}}
+  - {id: sales_taxes_and_charges, doctype: Sales Taxes and Charges, context: accounts, kind: boundary, json: erpnext/accounts/doctype/sales_taxes_and_charges/sales_taxes_and_charges.json}
+  - {id: payment_schedule, doctype: Payment Schedule, context: accounts, kind: boundary, json: erpnext/accounts/doctype/payment_schedule/payment_schedule.json}
+  - {id: payment_request, doctype: Payment Request, context: accounts, kind: boundary, json: erpnext/accounts/doctype/payment_request/payment_request.json, links: {reference_name: [sales_order, sales_invoice]}}
+  - {id: payment_entry, doctype: Payment Entry, context: accounts, kind: boundary, json: erpnext/accounts/doctype/payment_entry/payment_entry.json}
+  - {id: delivery_note, doctype: Delivery Note, context: stock, kind: boundary, json: erpnext/stock/doctype/delivery_note/delivery_note.json, key_fields: [is_return, return_against, per_billed], links: {customer: customer, sales_partner: sales_partner}, tables: {items: delivery_note_item, taxes: sales_taxes_and_charges, packed_items: packed_item, sales_team: sales_team}}
+  - {id: delivery_note_item, doctype: Delivery Note Item, context: stock, kind: boundary, json: erpnext/stock/doctype/delivery_note_item/delivery_note_item.json, links: {against_sales_order: sales_order, against_sales_invoice: sales_invoice, product_bundle: product_bundle}, row_refs: {so_detail: sales_order_item, si_detail: sales_invoice_item}}
+  - {id: packed_item, doctype: Packed Item, context: stock, kind: boundary, json: erpnext/stock/doctype/packed_item/packed_item.json, links: {product_bundle: product_bundle, parent_item: item}, key_fields: [parent_detail_docname]}
+  - {id: pick_list_item, doctype: Pick List Item, context: stock, kind: boundary, json: erpnext/stock/doctype/pick_list_item/pick_list_item.json, links: {sales_order: sales_order}, row_refs: {sales_order_item: sales_order_item}}
+  - {id: stock_reservation_entry, doctype: Stock Reservation Entry, context: stock, kind: boundary, json: erpnext/stock/doctype/stock_reservation_entry/stock_reservation_entry.json, links: {voucher_no: [sales_order]}, key_fields: [voucher_type, voucher_detail_no]}
+  - {id: material_request_item, doctype: Material Request Item, context: stock, kind: boundary, json: erpnext/stock/doctype/material_request_item/material_request_item.json, links: {sales_order: sales_order}, row_refs: {sales_order_item: sales_order_item}}
+  - {id: item, doctype: Item, context: stock, kind: boundary, json: erpnext/stock/doctype/item/item.json}
+  - {id: purchase_order_item, doctype: Purchase Order Item, context: buying, kind: boundary, json: erpnext/buying/doctype/purchase_order_item/purchase_order_item.json, links: {sales_order: sales_order, product_bundle: product_bundle}, row_refs: {sales_order_item: sales_order_item}, key_fields: [delivered_by_supplier]}
+  - {id: work_order, doctype: Work Order, context: manufacturing, kind: boundary, json: erpnext/manufacturing/doctype/work_order/work_order.json, links: {sales_order: sales_order}}
+  - {id: project, doctype: Project, context: projects, kind: boundary, json: erpnext/projects/doctype/project/project.json, links: {sales_order: sales_order}}
+  - {id: customer_group, doctype: Customer Group, context: setup, kind: boundary, json: erpnext/setup/doctype/customer_group/customer_group.json}
+  - {id: territory, doctype: Territory, context: setup, kind: boundary, json: erpnext/setup/doctype/territory/territory.json}
+  - {id: sales_person, doctype: Sales Person, context: setup, kind: boundary, json: erpnext/setup/doctype/sales_person/sales_person.json}
+  - {id: sales_partner, doctype: Sales Partner, context: setup, kind: boundary, json: erpnext/setup/doctype/sales_partner/sales_partner.json}
+
+# Document conversions ("Create" buttons). fn = whitelisted server method.
+# from/to are entity ids or doctype names outside the skeleton; check.py reads get_mapped_doc / new_doc
+# in the function (and helpers it calls) and compares source and target doctypes.
+flow_scan: [erpnext/selling, erpnext/crm/doctype/lead/mapper.py, erpnext/crm/doctype/opportunity/mapper.py, erpnext/crm/doctype/prospect/prospect.py, erpnext/stock/doctype/delivery_note/mapper.py, erpnext/accounts/doctype/sales_invoice/mapper.py, erpnext/buying/doctype/supplier_quotation/mapper.py]
+flows:
+  - {id: lead_to_customer, fn: erpnext.crm.doctype.lead.mapper.make_customer, from: lead, to: customer}
+  - {id: lead_to_quotation, fn: erpnext.crm.doctype.lead.mapper.make_quotation, from: lead, to: quotation}
+  - {id: opportunity_to_quotation, fn: erpnext.crm.doctype.opportunity.mapper.make_quotation, from: opportunity, to: quotation}
+  - {id: opportunity_to_customer, fn: erpnext.crm.doctype.opportunity.mapper.make_customer, from: opportunity, to: customer}
+  - {id: prospect_to_customer, fn: erpnext.crm.doctype.prospect.prospect.make_customer, from: prospect, to: customer}
+  - {id: supplier_quotation_to_quotation, fn: erpnext.buying.doctype.supplier_quotation.mapper.make_quotation, from: Supplier Quotation, to: quotation}
+  - {id: customer_to_quotation, fn: erpnext.selling.doctype.customer.mapper.make_quotation, from: customer, to: quotation}
+  - {id: customer_to_opportunity, fn: erpnext.selling.doctype.customer.mapper.make_opportunity, from: customer, to: opportunity}
+  - {id: customer_to_payment_entry, fn: erpnext.selling.doctype.customer.mapper.make_payment_entry, from: customer, to: payment_entry}
+  - {id: quotation_to_sales_order, fn: erpnext.selling.doctype.quotation.mapper.make_sales_order, from: quotation, to: sales_order, guard: Selling Settings.allow_sales_order_creation_for_expired_quotation}
+  - {id: quotation_to_sales_invoice, fn: erpnext.selling.doctype.quotation.mapper.make_sales_invoice, from: quotation, to: sales_invoice}
+  - {id: quotation_revision, fn: erpnext.selling.doctype.quotation.mapper.make_revision, from: quotation, to: quotation}
+  - {id: sales_order_to_delivery_note, fn: erpnext.selling.doctype.sales_order.mapper.make_delivery_note, from: sales_order, to: delivery_note}
+  - {id: sales_order_to_sales_invoice, fn: erpnext.selling.doctype.sales_order.mapper.make_sales_invoice, from: sales_order, to: sales_invoice}
+  - {id: sales_order_to_proforma, fn: erpnext.selling.doctype.proforma_invoice.proforma_invoice.make_proforma_invoice, from: sales_order, to: proforma_invoice, guard: Selling Settings.enable_proforma_invoice}
+  - {id: sales_order_to_pick_list, fn: erpnext.selling.doctype.sales_order.mapper.create_pick_list, from: sales_order, to: Pick List}
+  - {id: sales_order_to_material_request, fn: erpnext.selling.doctype.sales_order.mapper.make_material_request, from: sales_order, to: Material Request}
+  - {id: sales_order_to_raw_material_request, fn: erpnext.selling.doctype.sales_order.mapper.make_raw_material_request, from: sales_order, to: Material Request}
+  - {id: sales_order_to_purchase_order, fn: erpnext.selling.doctype.sales_order.mapper.make_purchase_order, from: sales_order, to: Purchase Order, note: drop shipping}
+  - {id: sales_order_to_inter_company_po, fn: erpnext.selling.doctype.sales_order.mapper.make_inter_company_purchase_order, from: sales_order, to: Purchase Order, delegates_to: erpnext.accounts.doctype.sales_invoice.mapper.make_inter_company_transaction}
+  - {id: inter_company_po_to_sales_order, fn: erpnext.buying.doctype.purchase_order.mapper.make_inter_company_sales_order, from: Purchase Order, to: sales_order, delegates_to: erpnext.accounts.doctype.sales_invoice.mapper.make_inter_company_transaction}
+  - {id: sales_order_to_work_orders, fn: erpnext.selling.doctype.sales_order.mapper.make_work_orders, from: sales_order, to: work_order}
+  - {id: sales_order_to_production_plan, fn: erpnext.selling.doctype.sales_order.mapper.make_production_plan, from: sales_order, to: Production Plan}
+  - {id: sales_order_to_project, fn: erpnext.selling.doctype.sales_order.mapper.make_project, from: sales_order, to: project}
+  - {id: sales_order_to_maintenance_schedule, fn: erpnext.selling.doctype.sales_order.mapper.make_maintenance_schedule, from: sales_order, to: Maintenance Schedule}
+  - {id: sales_order_to_maintenance_visit, fn: erpnext.selling.doctype.sales_order.mapper.make_maintenance_visit, from: sales_order, to: Maintenance Visit}
+  - {id: sales_order_to_subcontracting_inward, fn: erpnext.selling.doctype.sales_order.mapper.make_subcontracting_inward_order, from: sales_order, to: Subcontracting Inward Order}
+  - {id: sales_order_to_payment_request, fn: erpnext.accounts.doctype.payment_request.payment_request.make_payment_request, from: sales_order, to: payment_request, generic: true}
+  - {id: sales_order_to_payment_entry, fn: erpnext.accounts.doctype.payment_entry.payment_entry.get_payment_entry, from: sales_order, to: payment_entry, generic: true}
+  - {id: delivery_note_to_sales_invoice, fn: erpnext.stock.doctype.delivery_note.mapper.make_sales_invoice, from: delivery_note, to: sales_invoice}
+  - {id: delivery_note_to_installation_note, fn: erpnext.stock.doctype.delivery_note.mapper.make_installation_note, from: delivery_note, to: installation_note}
+  - {id: sales_invoice_to_delivery_note, fn: erpnext.accounts.doctype.sales_invoice.mapper.make_delivery_note, from: sales_invoice, to: delivery_note}
+  - {id: delivery_note_return, fn: erpnext.stock.doctype.delivery_note.mapper.make_sales_return, from: delivery_note, to: delivery_note, delegates_to: erpnext.controllers.sales_and_purchase_return.make_return_doc}
+  - {id: sales_invoice_return, fn: erpnext.accounts.doctype.sales_invoice.mapper.make_sales_return, from: sales_invoice, to: sales_invoice, delegates_to: erpnext.controllers.sales_and_purchase_return.make_return_doc}
+  - {id: product_bundle_new_version, fn: erpnext.selling.doctype.product_bundle.product_bundle.make_new_version, from: product_bundle, to: product_bundle}
+
+# Whitelisted converters found by flow_scan that are deliberately out of scope (no Selling entity involved).
+flows_out_of_scope:
+  - erpnext.crm.doctype.opportunity.mapper.make_request_for_quotation
+  - erpnext.crm.doctype.opportunity.mapper.make_supplier_quotation
+  - erpnext.crm.doctype.lead.mapper.make_opportunity
+  - erpnext.crm.doctype.prospect.prospect.make_opportunity
+  - erpnext.buying.doctype.supplier_quotation.mapper.make_purchase_order
+  - erpnext.buying.doctype.supplier_quotation.mapper.make_purchase_invoice
+  - erpnext.stock.doctype.delivery_note.mapper.make_delivery_trip
+  - erpnext.stock.doctype.delivery_note.mapper.make_packing_slip
+  - erpnext.stock.doctype.delivery_note.mapper.make_shipment
+  - erpnext.accounts.doctype.sales_invoice.mapper.make_maintenance_schedule
+  - erpnext.stock.doctype.delivery_note.mapper.make_inter_company_purchase_receipt
+  - erpnext.accounts.doctype.sales_invoice.mapper.make_inter_company_purchase_invoice
+  - erpnext.accounts.doctype.sales_invoice.mapper.create_dunning

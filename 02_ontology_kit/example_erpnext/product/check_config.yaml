@@ -1,0 +1,6 @@
+# Settings for check.py, check_change.py and index.py (all keys optional).
+# Frappe writes some paths relative to the app folder (hooks.py, docstrings): try both roots.
+path_roots: ["", erpnext/]
+# Documents of other contexts that flows lead from or to; they are not modelled in this ontology.
+external_ids: [Supplier Quotation, Pick List, Material Request, Purchase Order, Production Plan,
+  Maintenance Schedule, Maintenance Visit, Subcontracting Inward Order, number_cards, dashboard_charts]

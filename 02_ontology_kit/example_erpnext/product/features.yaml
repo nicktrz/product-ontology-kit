@@ -1,0 +1,175 @@
+# Cross-cutting functions of the Selling context: where they live, what they depend on, what limits apply.
+# settings.fields duplicate JSON defaults ({field: default}); check.py compares them with the DocType JSON.
+# depends_on lists entity ids (domain.yaml) and feature ids (this file).
+
+features:
+  - id: selling_settings
+    purpose: Global switches for the sales flow; read through frappe.get_single_value / frappe.db.get_single_value.
+    where: [erpnext/selling/doctype/selling_settings/selling_settings.py#SellingSettings, erpnext/selling/doctype_settings_map/sales_order.json, erpnext/selling/doctype_settings_map/quotation.json]
+    settings:
+      doctype: Selling Settings
+      fields: {cust_master_name: Customer Name, so_required: null, dn_required: null, sales_update_frequency: Daily, maintain_same_sales_rate: "0", maintain_same_rate_action: Stop, allow_sales_order_creation_for_expired_quotation: "0", allow_zero_qty_in_quotation: "0", allow_zero_qty_in_sales_order: "0", allow_negative_rates_for_items: "0", validate_selling_price: "0", skip_delivery_note_for_service_items: "0", enable_proforma_invoice: "0", enable_utm: "0", enable_tracking_sales_commissions: "0", enable_discount_accounting: "0", blanket_order_allowance: null}
+    constraints:
+      - so_required / dn_required (here and per Customer) are enforced by the invoice and delivery side, see erpnext/accounts/doctype/sales_invoice/sales_invoice.py#SalesInvoice.so_dn_required and erpnext/stock/doctype/delivery_note/delivery_note.py#DeliveryNote.so_required.
+      - Setup wizard overrides defaults (so_required=No, sales_update_frequency=Each Transaction), see erpnext/setup/setup_wizard/operations/install_fixtures.py.
+      - Some toggles add property setters on other doctypes on save (hide tax id, UTM section, commissions section).
+
+  - id: status_propagation
+    purpose: Downstream documents update per_delivered / per_billed / ordered_qty upstream; status is recomputed from status_map.
+    where: [erpnext/controllers/status_updater.py#StatusUpdater, erpnext/controllers/status_updater.py#status_map, erpnext/selling/doctype/sales_order/services/status.py#StatusService]
+    depends_on: [quotation, sales_order, delivery_note, sales_invoice, allowances]
+    see: status_dependencies (below)
+
+  - id: credit_limit
+    purpose: Blocks submission when customer outstanding plus open orders exceed the limit per company.
+    where: [erpnext/selling/doctype/customer/customer.py#check_credit_limit, erpnext/selling/doctype/customer/customer.py#get_customer_outstanding, erpnext/selling/doctype/sales_order/sales_order.py#SalesOrder.check_credit_limit, erpnext/accounts/utils.py#pre_submit_validation]
+    depends_on: [customer, customer_credit_limit, sales_order, sales_invoice, delivery_note]
+    settings:
+      doctype: Accounts Settings
+      fields: {credit_controller: null}
+    constraints:
+      - bypass_credit_limit_check on the Customer Credit Limit row moves the check from Sales Order to Sales Invoice.
+      - Re-opening a Sales Order re-checks the limit only when the new status is the literal "Draft" (controllers/item_close.py docstring).
+
+  - id: allowances
+    purpose: Over-delivery and over-billing tolerances used while propagating quantities.
+    where: [erpnext/controllers/status_updater.py#get_allowance_for]
+    settings:
+      doctype: Stock Settings
+      fields: {over_delivery_receipt_allowance: null, role_allowed_to_over_deliver_receive: null}
+    settings_2:
+      doctype: Accounts Settings
+      fields: {over_billing_allowance: null, role_allowed_to_over_bill: null}
+
+  - id: stock_reservation
+    purpose: Sales Order reserves stock through Stock Reservation Entry on submit (reserve_stock) or manually.
+    where: [erpnext/selling/doctype/sales_order/services/reservation.py#SalesOrderStockReservation, erpnext/stock/doctype/stock_reservation_entry/stock_reservation_entry.py, erpnext/public/js/stock_reservation.js]
+    depends_on: [sales_order, sales_order_item, stock_reservation_entry]
+    settings:
+      doctype: Stock Settings
+      fields: {enable_stock_reservation: "0", auto_reserve_stock: "0", allow_partial_reservation: "1"}
+    constraints: [Not used for subcontracted Sales Orders (is_subcontracted).]
+
+  - id: quotation_lifecycle
+    purpose: Revisions (one active version per original), validity and nightly expiry, lost reasons, CRM status feedback.
+    where: [erpnext/selling/doctype/quotation/quotation.py#Quotation.update_latest_revision, erpnext/selling/doctype/quotation/quotation.py#set_expired_status, erpnext/selling/doctype/quotation/mapper.py#make_revision]
+    depends_on: [quotation, opportunity, lead]
+    constraints:
+      - Lost or Ordered quotations cannot be revised (Quotation.validate_can_be_revised).
+      - Expired quotations cannot become Sales Orders unless allow_sales_order_creation_for_expired_quotation is set.
+
+  - id: proforma_invoice
+    purpose: Issue a value- or quantity-based proforma PDF from a submitted Sales Order and e-mail it.
+    where: [erpnext/selling/doctype/proforma_invoice/proforma_invoice.py#ProformaInvoice, erpnext/public/js/sales_order_proforma.js]
+    depends_on: [sales_order, proforma_invoice, selling_settings]
+    settings:
+      doctype: Selling Settings
+      fields: {enable_proforma_invoice: "0", default_proforma_print_format: null, proforma_email_template: null}
+    constraints: [Every server entry point calls validate_feature_enabled(); the button is injected via hooks.py doctype_js.]
+
+  - id: product_bundles
+    purpose: A bundle item on a sales document expands into Packed Item rows; stock moves on the packed rows.
+    where: [erpnext/stock/doctype/packed_item/packed_item.py#make_packing_list, erpnext/selling/doctype/product_bundle/product_bundle.py#get_active_product_bundle]
+    depends_on: [product_bundle, packed_item]
+
+  - id: item_close
+    purpose: Close or reopen single rows of a Sales Order; closed rows count as settled for per_delivered / per_billed.
+    where: [erpnext/controllers/item_close.py#update_closed_status, erpnext/public/js/utils/item_close.js]
+    depends_on: [sales_order, status_propagation]
+    tests: [erpnext/controllers/tests/test_item_close.py, erpnext/controllers/tests/test_item_close_sales_order.py, erpnext/controllers/tests/test_item_close_billing.py]
+
+  - id: drop_ship
+    purpose: Rows with delivered_by_supplier are bought on a Purchase Order and count as delivered when the supplier ships.
+    where: [erpnext/selling/doctype/sales_order/mapper.py#make_purchase_order, erpnext/selling/doctype/sales_order/services/status.py#StatusService.get_drop_ship_delivered_qty]
+    depends_on: [sales_order_item, purchase_order_item]
+
+  - id: inter_company
+    purpose: Internal customer orders mirror to a Purchase Order of the represented company and back.
+    where: [erpnext/accounts/doctype/sales_invoice/mapper.py#make_inter_company_transaction]
+    depends_on: [customer, sales_order]
+
+  - id: delivery_schedule
+    purpose: Split one Sales Order Item into dated deliveries.
+    where: [erpnext/selling/doctype/sales_order/services/delivery_schedule.py#DeliveryScheduleService]
+    depends_on: [sales_order_item, delivery_schedule_item]
+
+  - id: advance_payments
+    purpose: Payment Requests and advances against a Sales Order drive advance_payment_status and the "To Pay" status.
+    where: [erpnext/accounts/doctype/payment_request/payment_request.py#make_payment_request, erpnext/hooks.py#advance_payment_receivable_doctypes]
+    depends_on: [sales_order, payment_request, payment_entry]
+
+  - id: pricing_and_taxes
+    purpose: Price lists, pricing rules, discounts, taxes and totals shared by all selling documents.
+    where: [erpnext/controllers/taxes_and_totals.py#calculate_taxes_and_totals, erpnext/controllers/selling_controller.py#SellingController, erpnext/public/js/controllers/transaction.js, erpnext/public/js/utils/sales_common.js, erpnext/stock/get_item_details.py]
+    depends_on: [sales_taxes_and_charges]
+
+  - id: sales_team_commissions
+    purpose: Sales team split, partner commission and contribution on every selling document.
+    where: [erpnext/controllers/selling_controller.py#SellingController.calculate_commission, erpnext/controllers/selling_controller.py#SellingController.calculate_contribution]
+    depends_on: [sales_team, sales_partner, sales_person]
+    settings:
+      doctype: Selling Settings
+      fields: {enable_tracking_sales_commissions: "0"}
+
+  - id: approval_and_blanket_orders
+    purpose: Authorization Control on submit; Blanket Order quantities consumed by Sales Orders.
+    where: [erpnext/setup/doctype/authorization_control/authorization_control.py, erpnext/manufacturing/doctype/blanket_order/blanket_order.py#validate_against_blanket_order, erpnext/controllers/stock_controller.py#StockController.update_blanket_order]
+    depends_on: [quotation, sales_order]
+
+  - id: draft_link_guard
+    purpose: Warns before creating a follow-up document when a draft of that doctype already exists for the source.
+    where: [erpnext/controllers/draft_links.py#DraftLinkFinder, erpnext/public/js/utils/draft_link_guard.js]
+    tests: [erpnext/controllers/tests/test_draft_links.py]
+
+  - id: bulk_transactions
+    purpose: Create Delivery Notes / Sales Invoices from many Sales Orders in background jobs, with hourly retry.
+    where: [erpnext/utilities/bulk_transaction.py#transaction_processing, erpnext/public/js/bulk_transaction_processing.js]
+    depends_on: [sales_order, delivery_note, sales_invoice]
+
+  - id: customer_portal
+    purpose: Customers see their quotations, orders, invoices and deliveries on the website.
+    where: [erpnext/hooks.py#website_route_rules, erpnext/hooks.py#has_website_permission, erpnext/controllers/website_list_for_contact.py, erpnext/templates/pages/order.py]
+    depends_on: [quotation, sales_order, sales_invoice, delivery_note]
+
+  - id: company_restriction
+    purpose: Restricts which companies may transact with a Customer.
+    where: [erpnext/hooks.py#permission_query_conditions, erpnext/stock/doctype/company_restriction/company_restriction.py]
+    depends_on: [customer]
+
+  - id: localization
+    purpose: UI strings are translated through gettext catalogs; regional code overrides invoice behaviour.
+    where: [erpnext/locale/main.pot, erpnext/hooks.py#regional_overrides, erpnext/regional/italy/utils.py]
+    see: copy.yaml
+
+  - id: utm_attribution
+    purpose: UTM source / medium / campaign on Quotation and Sales Order, shown only when enabled.
+    where: [erpnext/selling/doctype/selling_settings/selling_settings.py#toggle_utm_analytics_section]
+    settings:
+      doctype: Selling Settings
+      fields: {enable_utm: "0"}
+    see: analytics.yaml
+
+# Status dependencies declared through StatusUpdater (status_updater lists in controllers).
+# check.py finds a dict with exactly these keys/values in the named file.
+status_dependencies:
+  - {declared_in: erpnext/stock/doctype/delivery_note/delivery_note.py, source_dt: Delivery Note Item, target_dt: Sales Order Item, join_field: so_detail, target_field: delivered_qty, target_parent_field: per_delivered, status_field: delivery_status}
+  - {declared_in: erpnext/accounts/doctype/sales_invoice/sales_invoice.py, source_dt: Sales Invoice Item, target_dt: Sales Order Item, join_field: so_detail, target_field: billed_amt, target_parent_field: per_billed, status_field: billing_status}
+  - {declared_in: erpnext/accounts/doctype/sales_invoice/sales_invoice.py, source_dt: Sales Invoice Item, target_dt: Sales Order Item, join_field: so_detail, target_field: delivered_qty, target_parent_field: per_delivered, status_field: delivery_status, note: only when update_stock is set}
+  - {declared_in: erpnext/selling/doctype/sales_order/sales_order.py, source_dt: Sales Order Item, target_dt: Quotation Item, join_field: quotation_item, target_field: ordered_qty}
+  - {declared_in: erpnext/stock/doctype/delivery_note/delivery_note.py, source_dt: Delivery Note Item, target_dt: Sales Invoice Item, join_field: si_detail, target_field: delivered_qty}
+
+# Hooks in erpnext/hooks.py that touch the context. check.py reads hooks.py and finds value under path.
+hooks:
+  - {path: scheduler_events.daily_maintenance, value: erpnext.selling.doctype.quotation.quotation.set_expired_status, effect: Quotation -> Expired after valid_till}
+  - {path: scheduler_events.daily_maintenance, value: erpnext.crm.doctype.opportunity.opportunity.auto_close_opportunity, effect: CRM side of quotation follow-up}
+  - {path: scheduler_events.daily_maintenance, value: erpnext.controllers.accounts_controller.update_invoice_status, effect: overdue invoices}
+  - {path: scheduler_events.hourly_maintenance, value: erpnext.utilities.bulk_transaction.retry, effect: retries failed bulk SO -> DN/SI}
+  - {path: doctype_js.Sales Order, value: public/js/sales_order_proforma.js, effect: proforma button}
+  - {path: doctype_js.Customer, value: public/js/customer_overview.js, effect: customer overview tab}
+  - {path: doc_events.Sales Invoice.on_submit, value: erpnext.regional.italy.utils.sales_invoice_on_submit, effect: regional e-invoice}
+  - {path: calendars, value: Sales Order}
+  - {path: advance_payment_receivable_doctypes, value: Sales Order}
+  - {path: has_website_permission.Sales Order, value: erpnext.controllers.website_list_for_contact.has_website_permission}
+  - {path: has_website_permission.Quotation, value: erpnext.controllers.website_list_for_contact.has_website_permission}
+  - {path: permission_query_conditions.Customer, value: erpnext.stock.doctype.company_restriction.company_restriction.get_permission_query_conditions}
+  - {path: communication_doctypes, value: Customer}
