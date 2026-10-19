@@ -1,53 +1,53 @@
-# Онтология продукта для команды агентов: памятка
+# Product ontology for a team of agents: memo
 
-**Онтология продукта** — файлы в папке `product/` рядом с кодом. В них записано, из чего состоит продукт, как связаны его части и какие решения и требования действуют, со ссылками на код. Онтология лежит в репозитории, её читает агент на любой модели.
+**A product ontology** is a set of files in a `product/` folder next to the code. It records what the product consists of, how its parts are connected, and which decisions and requirements apply, with references to the code. The ontology lives in the repository, and an agent on any model can read it.
 
-## Что она даёт
-- Агент видит связи, которых нет в тексте кода: куда ведёт экран, какими путями создаётся документ, что решил продакт.
-- Агент берёт из онтологии только нужную запись и не тратит токены на чтение всей онтологии.
-- Скрипт без участия модели проверяет, выполняет ли изменение агента требования из онтологии.
+## What it gives
+- The agent sees links that are not in the text of the code: where a screen leads, which paths create a document, what the product owner decided.
+- The agent takes only the record it needs and does not spend tokens reading the whole ontology.
+- A script, with no model involved, checks whether an agent's change meets the requirements in the ontology.
 
-## Где пользы не видно
-- Код, который модель уже знает: открытые популярные системы.
-- Вопросы, ответ на которые находится поиском по коду.
-- Самая дешёвая модель: с онтологией она находит меньше и тратит больше.
-- Онтология большой системы, которую агент читает целиком: он тратит больше токенов, чем без неё.
+## Where no benefit shows
+- Code the model already knows: popular open-source systems.
+- Questions whose answer a search through the code finds.
+- The cheapest model: with the ontology it finds less and spends more.
+- The ontology of a large system read in full: the agent spends more tokens than without it.
 
-## Два слоя
-- **Требования и решения** записывают люди с первого дня, сразу в проверяемой форме. Замысел продакта модель из кода не восстановит.
-- **Структуру** собирает модель, когда схема данных перестала меняться каждый день. Скрипт сверки находит записи, которые разошлись с кодом.
+## Two layers
+- **Requirements and decisions** are written by people from day one, straight away in a checkable form. The model cannot recover the product owner's intent from the code.
+- **The structure** is built by a model once the data schema stops changing every day. A check script finds records that no longer match the code.
 
-## Что записывать
-Требования и решения записывают на любом уровне подробности.
+## What to record
+Requirements and decisions are recorded at any level of detail.
 
-- **Карта:** части продукта и где они лежат в коде.
-- **Документы и связи:** сущности, переходы между экранами и документами, все пути создания документа. Это основной уровень, на нём работает проверка изменений.
-- **Поля:** откуда поле заполняется, куда переносится, где печатается и выводится в отчётах. Этот уровень дороже в сборке и в чтении. На открытой системе качество он не поднял, на закрытой его пока не проверяли.
-- **Функции и вызовы:** граф кода. Его строят инструменты анализа кода, в онтологию он не входит.
+- **Map:** the parts of the product and where they live in the code.
+- **Documents and links:** entities, conversions between screens and documents, every path that creates a document. This is the main level; change checks work on it.
+- **Fields:** where a field is filled from, where it is carried to, where it is printed and shown in reports. This level costs more to build and to read. On an open-source system it did not raise answer quality; on a closed one it has not been tested yet.
+- **Functions and calls:** the code graph. Code analysis tools build it; it is not part of the ontology.
 
-## Как давать агенту
-- **Агенту-разработчику:** оглавление и нужные записи по поиску.
-- **Агенту продакта и аналитика:** решения и требования целиком, остальное по запросу.
+## How to give it to an agent
+- **Developer agent:** the index and the records it needs, by search.
+- **Product owner and analyst agents:** decisions and requirements in full, everything else on request.
 
-## Требование для агента
-- **источник значения:** документ, из которого берётся значение; по нему на ревью видно, что агент подставил своё;
-- **исключения** перечислены явно, пустой список значит, что их нет;
-- **где действует:** все пути создания документа;
-- **открытые вопросы:** пока они есть, изменение этого поля не проходит проверку;
-- **тип:** продуктовое нарушение возвращают продакту, техническое исправляет автор.
+## A requirement an agent can follow
+- **source of the value:** the document the value comes from; in review it shows that the agent put in something of its own;
+- **exceptions** are listed explicitly; an empty list means there are none;
+- **where it applies:** every path that creates the document;
+- **open questions:** while there are any, a change to this field does not pass the check;
+- **type:** a product violation goes back to the product owner, a technical one is fixed by the author.
 
-Решения, которые агент принял сам, люди утверждают на ревью, как код.
+People approve the decisions an agent made on its own in review, like code.
 
-## Проверка
-- `check.py` сверяет онтологию с кодом. Его ставят в CI на каждое изменение.
-- `check_change.py` проверяет изменение по требованиям: пути создания, заглушки, ослабление правила. Скрипт видит только то, что записано в онтологии. За полноту путей и за то, откуда берётся значение, отвечает человек на ревью.
+## Checks
+- `check.py` checks the ontology against the code. It runs in CI on every change.
+- `check_change.py` checks a change against the requirements: creation paths, stubs, weakening of the rule. The script sees only what is recorded in the ontology. A reviewer is responsible for the completeness of paths and for where the value comes from.
 
-## Команда агентов
-- Модель подбирают по сложности работы: анализ и итоговую проверку делает сильная, код и тексты средняя, проход по чек-листу дешёвая.
-- В конце работает ведущий на сильной модели. Он читает отчёт тестировщика и исправляет трудные места.
-- Модели сравнивают по цене всей задачи: дорогая за токен модель может потратить на задачу меньше токенов.
+## Agent team
+- The model is chosen by the difficulty of the work: a strong model does analysis and the final review, a mid-range one writes code and texts, a cheap one goes through a checklist.
+- At the end, a lead on a strong model reads the tester's report and fixes the hard parts.
+- Models are compared by the cost of the whole task: a model that is expensive per token may spend fewer tokens on the task.
 
-## С чего начать
-С одной части системы, где ошибка дороже всего: документы, деньги, права доступа, обязательные поля. Для существующего продукта подходит та часть, которую меняют сейчас.
+## Where to start
+With one part of the system where a mistake costs most: documents, money, access rights, mandatory fields. For an existing product, the part that is being changed now.
 
-*Митап «ИИ в разработке ПО», 20.10.2026. Николай Тржаскал, FabricaONE.AI. Скрипты и шаблон — в папке `02_ontology_kit`, модели по ролям — в `03_agent_team`.*
+*Meetup "AI in software development", 20 October 2026. Nicolay Amiel Trzhascal, FabricaONE.AI. Scripts and template: `02_ontology_kit`; models by role: `03_agent_team`.*
