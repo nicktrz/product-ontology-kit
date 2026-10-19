@@ -1,65 +1,67 @@
-# Набор «Онтология продукта»
+# Product ontology kit
 
-Материалы к докладу «ГенИИ в продуктовом управлении. Работа с виртуальными сотрудниками», митап «ИИ в разработке ПО», 20.10.2026. Николай Тржаскал, FabricaONE.AI.
+**English** · [Русский](README.ru.md)
 
-## Что это
+Materials for the talk "GenAI in product management. Working with virtual employees", meetup "AI in software development", 20 October 2026. Nicolay Amiel Trzhascal, FabricaONE.AI.
 
-Онтология продукта — небольшой набор файлов в папке `product/` рядом с кодом. В них записано, из чего состоит продукт, как связаны его части и какие решения и требования действуют, со ссылками на код. Агент начинает с онтологии и идёт в код по ссылкам. Скрипты следят, чтобы онтология не разошлась с кодом, и проверяют изменения агента по требованиям.
+## What it is
 
-У онтологии два слоя:
-- **требования и решения** записывают люди: замысел продакта модель из кода не восстановит;
-- **структуру** (сущности, связи, карту кода) собирает модель, а скрипт сверяет её с кодом.
+A product ontology is a small set of files in a `product/` folder next to the code. It records what the product consists of, how its parts are connected, and which decisions and requirements apply, with references to the code. An agent starts from the ontology and follows the references into the code. Scripts make sure the ontology stays in line with the code and check an agent's changes against the requirements.
 
-## Что в папке
+The ontology has two layers:
+- **requirements and decisions** are written by people: the model cannot recover the product owner's intent from the code;
+- **the structure** (entities, links, code map) is built by a model, and a script checks it against the code.
 
-| Файл или папка | Зачем |
+## What is in the folder
+
+| File or folder | Purpose |
 |---|---|
-| `ontology_template.md` | Состав файлов, форма записей и требований, уровни подробности, что проверяют скрипты, настройки |
-| `build_prompt.md` | Задания сильной модели: собрать онтологию своей системы и, по желанию, уровень полей |
-| `tools/` | Скрипты для любой системы: сверка с кодом `check.py`, оглавление `index.py`, поиск `find.py`, проверка изменений `check_change.py` |
-| `agent_rules/` | Правило, которое агент читает в каждой задаче: `CLAUDE.md` для Claude Code, `AGENTS.md` для Codex и других сред, которые читают этот файл, `.cursor/rules/ontology.mdc` для Cursor; `.claude/settings.json` разрешает агенту запускать скрипты без подтверждения |
-| `example_erpnext/product/` | Готовая онтология модуля «Продажи» открытой ERP-системы ERPNext на уровне документов и связей: записи, свои проверки под ERPNext, требование в проверяемой форме |
+| `ontology_template.md` | Set of files, form of records and requirements, levels of detail, what the scripts check, settings |
+| `build_prompt.md` | Prompts for a strong model: build the ontology of your system and, optionally, the field level |
+| `tools/` | Scripts for any system: check against the code `check.py`, index `index.py`, search `find.py`, change check `check_change.py` |
+| `agent_rules/` | The rule an agent reads in every task: `CLAUDE.md` for Claude Code, `AGENTS.md` for Codex and other environments that read it, `.cursor/rules/ontology.mdc` for Cursor; `.claude/settings.json` lets the agent run the scripts without asking |
+| `example_erpnext/product/` | A finished ontology of the Selling module of the open-source ERP system ERPNext at the document level: records, ERPNext-specific checks, a requirement in the checkable form |
 
-Шаблон, промпты сборки, правило для агента и скрипты написаны на английском: их читает агент, а модели так проще работать и меньше ошибок перевода. Пояснения для людей на русском.
+The template, build prompts, agent rules and scripts are in English: agents read them, and English is easier for models and leaves no room for translation errors.
 
-Папки `.cursor` и `.claude` скрытые. В Finder их показывает сочетание Cmd+Shift+точка.
+The `.cursor` and `.claude` folders are hidden. In Finder, Cmd+Shift+. shows them.
 
-## Как собрать онтологию своего продукта
+## How to build the ontology of your product
 
-1. **Выбрать часть системы**, где ошибка дороже всего: документы, деньги, права доступа, обязательные поля. Для существующего продукта подходит часть, которую меняют сейчас.
-2. **Положить скрипты и шаблон.** В корне репозитория создать папку `product/` и скопировать в неё всё из `tools/` и файл `ontology_template.md`.
-3. **Собрать структуру моделью.** Дать сильной модели первый промпт из `build_prompt.md`. Она соберёт YAML-файлы, настройки `check_config.yaml` и свои проверки `check_local.py` и добьётся, чтобы `check.py` проходил.
-4. **Просмотреть.** Человек сверяет связи и пути создания документов: модель может пропустить путь или придумать связь.
-5. **Записать требования и решения.** В `product/decisions.yaml`, в форме из раздела «Decisions and requirements» шаблона. Требование с исключениями и всеми путями создания документа проверяет `check_change.py`. После правки онтологии снова запускают `python3 product/index.py` и `python3 product/check.py`.
-6. **Положить правило для агента** в корень репозитория: `CLAUDE.md`, `AGENTS.md` или папку `.cursor`, а для Claude Code ещё и папку `.claude`. Если такой файл в репозитории уже есть, текст правила дописывают в конец, а строки разрешений добавляют в `permissions.allow` своего `.claude/settings.json`. Если Claude Code всё равно спрашивает разрешение на запуск скриптов (так было у меня в режиме без человека, `claude -p`), файл передают явно: `claude -p "..." --settings .claude/settings.json`.
-7. **Подключить к CI.** На каждое изменение:
+1. **Pick a part of the system** where a mistake costs most: documents, money, access rights, mandatory fields. For an existing product, the part that is being changed now.
+2. **Put the scripts and the template in place.** Create `product/` at the repository root and copy everything from `tools/` and the file `ontology_template.md` into it.
+3. **Build the structure with a model.** Give a strong model the first prompt from `build_prompt.md`. It builds the YAML files, the `check_config.yaml` settings and its own checks `check_local.py`, and makes `check.py` pass.
+4. **Review.** A person checks the links and the paths that create documents: the model can miss a path or invent a link.
+5. **Write down requirements and decisions.** In `product/decisions.yaml`, in the form from the "Decisions and requirements" section of the template. `check_change.py` checks a requirement that lists its exceptions and every path that creates the document. After editing the ontology, run `python3 product/index.py` and `python3 product/check.py` again.
+6. **Put the agent rule** at the repository root: `CLAUDE.md`, `AGENTS.md` or the `.cursor` folder, and for Claude Code also the `.claude` folder. If such a file already exists in the repository, append the rule text to it and add the permission lines to `permissions.allow` in your `.claude/settings.json`. If Claude Code still asks for permission to run the scripts (it did for me in non-interactive mode, `claude -p`), pass the file explicitly: `claude -p "..." --settings .claude/settings.json`.
+7. **Add to CI.** On every change:
    ```
    python3 product/check.py
    python3 product/check_change.py --base origin/main
    ```
-   Первая команда падает, если онтология разошлась с кодом. Вторая падает, если изменение нарушает утверждённое требование. Для неё CI нужна история ветки `main`: полная копия репозитория или `git fetch origin main` перед проверкой. Код возврата 2 значит ошибку вызова: нет такой ветки или такого требования.
+   The first command fails if the ontology no longer matches the code. The second fails if the change violates an approved requirement. It needs the history of `main` in CI: a full clone or `git fetch origin main` before the check. Exit code 2 means a usage error: no such branch or no such requirement.
 
-Скриптам нужны Python 3.9 или новее и git. Другие зависимости не нужны.
+The scripts need Python 3.9 or newer and git. No other dependencies.
 
-**Для 1С и других платформ с метаданными** источником структуры служит выгрузка конфигурации в файлы и модули в git. Скрипты работают с любыми текстовыми файлами, ссылки на код в них пишут путём: `src/CommonModules/Orders/Ext/Module.bsl#СоздатьЗаказ`. На 1С скрипты не проверялись; на Python и TypeScript проверены.
+**For 1C and other metadata-driven platforms**, the source of the structure is the configuration exported to files and modules in git. The scripts work with any text files; references to code are written as paths: `src/CommonModules/Orders/Ext/Module.bsl#СоздатьЗаказ`. The scripts have not been tested on 1C; they have been tested on Python and TypeScript.
 
-## Как посмотреть пример
+## How to look at the example
 
-Пример показывает, как выглядят файлы и записи. Его можно запустить на коде ERPNext:
+The example shows what the files and records look like. You can run it on the ERPNext code:
 
 ```
 git clone https://github.com/frappe/erpnext && cd erpnext
 git checkout 59ef251a961dff39f3296f84a1bd14bd106959af
-cp -R "<путь к набору>/example_erpnext/product" .
+cp -R "<path to the kit>/example_erpnext/product" .
 python3 product/check.py
 ```
 
-Последняя строка вывода: `OK: 167 records in 7 files, ...`. Перед ней скрипт печатает замечания (`note:`): повторяющиеся id и файлы переводов, которые отстают от основного.
+The last line of output: `OK: 167 records in 7 files, ...`. Before it, the script prints notes (`note:`): repeated ids and translation files that lag behind the main one.
 
-Поиск одной записи: `python3 product/find.py sales_order_to_sales_invoice` печатает запись о переходе «заказ → счёт» и экраны, с которых его запускают.
+Fetching one record: `python3 product/find.py sales_order_to_sales_invoice` prints the record of the order → invoice conversion and the screens it starts from.
 
-Проверка изменений: `python3 product/check_change.py --base HEAD` на нетронутом коде перечисляет всё, чего не хватает для требования «номер договора с клиентом обязателен в заказе»: поля в документах, заполнения на каждом пути создания заказа, вывода в отчётах и печатных формах, миграции для старых заказов.
+Checking changes: on untouched code, `python3 product/check_change.py --base HEAD` lists everything missing for the requirement "the customer contract number is mandatory on the order": the field in the documents, filling it on every path that creates an order, showing it in reports and print formats, a migration for existing orders.
 
-Клонировать нужно целиком: в неполной копии (`--depth 1`) этого коммита может не быть.
+Clone the full repository: a shallow clone (`--depth 1`) may not contain this commit.
 
-Онтологию модуля «Продажи» собрала модель Opus по ранней версии первого промпта из `build_prompt.md`: 18 минут, около $5 по прейскуранту API. Общие скрипты, оглавление, поиск и требование я добавил позже. Содержимое на английском, как и код ERPNext. В онтологии не хватает пути «рамочный договор → заказ», это записано в `product/README.md`.
+The Selling ontology was built by Opus with an early version of the first prompt from `build_prompt.md`: 18 minutes, about $5 at API list prices. The generic scripts, index, search and requirement were added later. The content is in English, like the ERPNext code. The ontology lacks the blanket order → sales order path; this is noted in `product/README.md`.

@@ -1,42 +1,44 @@
-# Команда агентов: роли, модели, ведущий
+# Agent team: roles, models, lead
 
-Материалы к докладу «ГенИИ в продуктовом управлении. Работа с виртуальными сотрудниками», митап «ИИ в разработке ПО», 20.10.2026. Николай Тржаскал, FabricaONE.AI.
+**English** · [Русский](README.ru.md)
 
-## Как устроена команда
+Materials for the talk "GenAI in product management. Working with virtual employees", meetup "AI in software development", 20 October 2026. Nicolay Amiel Trzhascal, FabricaONE.AI.
 
-Пять агентов в ролях команды делают одну задачу и передают друг другу файлы в папке `work/` репозитория: аналитик → UX → копирайтер → разработчик → тестировщик. В конце ведущий на сильной модели смотрит общий результат и исправляет трудное. У всех есть общая онтология продукта (`product/`, см. набор «Онтология продукта»).
+## How the team works
 
-| Роль | Уровень модели | Что делает | Пишет |
+Five agents in team roles work on one task and pass files to each other in the repository's `work/` folder: analyst → UX → copywriter → developer → tester. At the end, a lead on a strong model reviews the overall result and fixes the hard parts. All of them share the product ontology (`product/`, see the product ontology kit).
+
+| Role | Model level | What it does | Writes |
 |---|---|---|---|
-| Аналитик | сильная | спецификация: что меняется, критерии приёмки, затронутые требования и все пути создания документов | `work/<id>-spec.md` |
-| UX | средняя | поток и экраны текстом, состояния, доступность | `work/<id>-ux.md` |
-| Копирайтер | средняя | тексты на всех языках продукта | `work/<id>-copy.md` |
-| Разработчик | средняя | код, тексты в файлах строк, обновление онтологии | `work/<id>-dev-notes.md` |
-| Тестировщик | дешёвая | тесты, проход по критериям приёмки, список рисков | `work/<id>-qa.md` |
-| Ведущий | сильная | читает риски тестировщика, исправляет трудное, добавляет тесты | `work/<id>-review.md` |
+| Analyst | strong | specification: what changes, acceptance criteria, affected requirements and every path that creates the affected documents | `work/<id>-spec.md` |
+| UX | mid-range | flow and screens as text, states, accessibility | `work/<id>-ux.md` |
+| Copywriter | mid-range | texts in all product languages | `work/<id>-copy.md` |
+| Developer | mid-range | code, texts in string files, ontology updates | `work/<id>-dev-notes.md` |
+| Tester | cheap | tests, a pass over the acceptance criteria, a list of risks | `work/<id>-qa.md` |
+| Lead | strong | reads the tester's risks, fixes the hard parts, adds tests | `work/<id>-review.md` |
 
-Какую модель ставить на каждый уровень в семействах OpenAI, Gemini, GLM, Qwen, Kimi, DeepSeek, MiniMax и внутри контура, описано в `models_by_role.md`.
+Which model to use at each level in the OpenAI, Gemini, GLM, Qwen, Kimi, DeepSeek and MiniMax families and on-premises is described in `models_by_role.md`.
 
-## Что в папке
+## What is in the folder
 
-| Файл | Зачем |
+| File | Purpose |
 |---|---|
-| `role_tasks/` | Задания шести ролям, на английском: их читает агент. Перед запуском в копии подставляют значения в угловых скобках: `<id>` — номер задачи, команды сборки и тестов, путь к документу с ограничениями |
-| `models_by_role.md` | Какую модель ставить на какую роль в разных семействах, по независимым бенчмаркам на 19.10.2026 |
-| `models_detailed.md` | Полный разбор: цены, контекст, лицензии, заявленные производителями цифры, оговорки к бенчмаркам |
+| `role_tasks/` | Task templates for the six roles, in English: agents read them. Before a run, fill in the values in angle brackets in a copy: `<id>` is the task number, plus build and test commands and the path to the document with constraints |
+| `models_by_role.md` | Which model to use for which role in different families, based on independent benchmarks as of 19 October 2026 |
+| `models_detailed.md` | The full breakdown: prices, context, licenses, vendor-reported numbers, caveats about benchmarks |
 
-## Как запускать
+## How to run it
 
-Задания не привязаны к агентной среде. Я запускал их в Claude Code; в Codex, Cursor, Qwen Code, Kimi Code CLI и других средах не проверял. Каждая роль запускается отдельной сессией в корне репозитория, по очереди, со своей моделью. Задание роли — текст из `role_tasks/` с подставленными значениями. Правило для агента и онтология лежат в репозитории, поэтому их читает каждая роль.
+The tasks are not tied to an agent environment. I ran them in Claude Code; I have not tested them in Codex, Cursor, Qwen Code, Kimi Code CLI or other environments. Each role runs as a separate session at the repository root, one after another, with its own model. A role's task is the text from `role_tasks/` with the values filled in. The agent rules and the ontology live in the repository, so every role reads them.
 
-Команду удобно вести в отдельной ветке. До первой роли записывают коммит, с которого начинается задача: по нему разработчик и ведущий запускают `python3 product/check_change.py --base <коммит до задачи>`, а ведущий смотрит изменения командой `git diff <коммит до задачи>`. Перед ролью ведущего новые файлы добавляют командой `git add -A`, чтобы `git diff` показал и их. Папку `work/` с документами команды `check_change.py` изменением кода не считает; её удобно добавить в `.gitignore`.
+Running the team in a separate branch is convenient. Before the first role, note the commit the task starts from: the developer and the lead run `python3 product/check_change.py --base <commit before the task>` against it, and the lead reviews the changes with `git diff <commit before the task>`. Before the lead's turn, add new files with `git add -A` so that `git diff` shows them too. `check_change.py` does not count the `work/` folder with the team's documents as a code change; adding it to `.gitignore` is convenient.
 
-Если среда работает без человека, ей заранее разрешают правку файлов и запуск команд сборки, тестов и скриптов онтологии. В Claude Code это список разрешённых команд в `.claude/settings.json`. Образец лежит в наборе «Онтология продукта», в папке `agent_rules/`: в нём разрешены только скрипты онтологии, команды сборки и тестов дописывают в тот же список, правку файлов разрешает ключ `--permission-mode acceptEdits`. В режиме `claude -p` файл настроек передают явно ключом `--settings .claude/settings.json`.
+If the environment runs without a person, allow file edits and build, test and ontology script commands in advance. In Claude Code this is the list of allowed commands in `.claude/settings.json`. A sample is in the product ontology kit, in `agent_rules/`: it allows only the ontology scripts; add build and test commands to the same list, and allow file edits with `--permission-mode acceptEdits`. In `claude -p` mode, pass the settings file explicitly with `--settings .claude/settings.json`.
 
-## Что важно
+## What matters
 
-- **Сильную модель ставят на разбор задачи и итоговую проверку.** Код и тексты по спецификации делает средняя модель, проход по чек-листу дешёвая.
-- **Ведущий видит отчёт тестировщика.** Дешёвая модель по чек-листу замечает риск, сильная подтверждает его тестом и исправляет.
-- **Роли связывают общая онтология и общая папка `work/`.**
-- **Продуктовые решения агенты не принимают:** открытые вопросы они записывают для продакта.
-- **Расход по ролям считают по каждой сессии отдельно.** В Claude Code в режиме без человека (`claude -p --output-format stream-json --verbose`) он лежит в поле `modelUsage` итогового события; поле `usage` там относится только к последнему шагу.
+- **The strong model goes on task analysis and the final review.** A mid-range model writes code and texts from the specification, a cheap one goes through the checklist.
+- **The lead sees the tester's report.** A cheap model working through a checklist notices a risk; a strong one confirms it with a test and fixes it.
+- **The shared ontology and the shared `work/` folder tie the roles together.**
+- **Agents do not make product decisions:** they write open questions down for the product owner.
+- **Cost per role is counted per session.** In Claude Code in non-interactive mode (`claude -p --output-format stream-json --verbose`) it is in the `modelUsage` field of the final event; the `usage` field there covers only the last step.

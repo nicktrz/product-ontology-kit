@@ -32,7 +32,7 @@ python3 product/check_change.py --base origin/main
 
 The scripts need Python 3.9 or newer and git, nothing else.
 
-The template, prompts, agent rules, role tasks and scripts are in English: agents read them. The kit's guides for people (`02_ontology_kit/README.md`, `03_agent_team/README.md`, the model guides) are in Russian.
+The template, prompts, agent rules, role tasks and scripts are in English: agents read them. Guides for people are in English and in Russian (`*.ru.md`).
 
 ## What was tested
 

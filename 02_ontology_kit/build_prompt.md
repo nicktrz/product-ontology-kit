@@ -1,10 +1,12 @@
-# Промпт сборки онтологии
+# Ontology build prompt
 
-Этот промпт дают сильной модели в агентной среде (Claude Code, Codex, Cursor и подобных) один раз, в корне репозитория. Перед запуском в папке `product/` уже лежат скрипты из `tools/` и файл `ontology_template.md`. Промпты написаны на английском: так модели проще работать и меньше ошибок перевода. Значения в угловых скобках подставляют под свою систему.
+**English** · [Русский](build_prompt.ru.md)
 
-Онтологию модуля «Продажи» ERPNext из примера Opus собрал по ранней версии этого задания за 18 минут, сборка стоила около $5 по прейскуранту API.
+Give this prompt once to a strong model in an agent environment (Claude Code, Codex, Cursor and the like), at the repository root. Before the run, `product/` already holds the scripts from `tools/` and the file `ontology_template.md`. The prompts are in English: that is easier for models and leaves no room for translation errors. Replace the values in angle brackets with those of your system.
 
-## Уровень документов и связей
+Opus built the Selling ontology of ERPNext from the example with an early version of this prompt in 18 minutes; the build cost about $5 at API list prices.
+
+## Document and link level
 
 ```
 Build the product ontology in `product/` for the part of the system <name of the part, e.g. "Sales">: <folders or modules>, and its links to neighbouring parts (<neighbours>). The format, the set of files and the rules are described in `product/ontology_template.md`. Do not describe the whole system: neighbouring parts are needed only as the points where they meet this part.
@@ -27,14 +29,14 @@ Write the ontology in English. Do not create an agent rules file. Do not change 
 At the end, list briefly what is included, what is not, and what you are unsure about.
 ```
 
-После сборки:
-- человек просматривает `domain.yaml` и переходы: модель может пропустить путь создания документа;
-- требования и решения, которых нет в источниках, люди дописывают в `decisions.yaml` сами;
-- `python3 product/check.py` ставят в CI на каждое изменение.
+After the build:
+- a person reviews `domain.yaml` and the conversions: the model can miss a path that creates a document;
+- people add the requirements and decisions that are not in the sources to `decisions.yaml` themselves;
+- `python3 product/check.py` goes into CI on every change.
 
-## Уровень полей, по желанию
+## Field level, optional
 
-Второй промпт запускают после того, как уровень документов собран и `check.py` проходит. Уровень полей дороже в сборке и в чтении. На открытой системе качество он не поднял, на закрытой его пока не проверяли, поэтому его собирают для одной части системы, где ошибка дороже всего.
+Run the second prompt after the document level is built and `check.py` passes. The field level costs more to build and to read. On an open-source system it did not raise answer quality; on a closed one it has not been tested yet. So it is built for one part of the system, where a mistake costs most.
 
 ```
 `product/` holds the ontology of the part of the system <name of the part> at the document level: entities, conversions, screens, decisions, code map, with the scripts `index.py`, `find.py`, `check.py` and `check_local.py`. Add the field level to it.
